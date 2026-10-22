@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardian · Echo Show (simulated)</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="device" aria-label="Simulated Echo Show">
+  <section class="left" aria-label="Conversation">
+    <header><span class="logo">🛡️</span> Guardian <span id="mode" class="mode"></span></header>
+    <div id="transcript" class="transcript" aria-live="polite">
+      <div class="msg bot">Hello. I can check a link or message, find out if a caller is really family, or help if you already shared a code. I will never ask for your passwords, codes or PINs.</div>
+    </div>
+    <form id="form" class="composer">
+      <button type="button" id="mic" class="mic" aria-label="Press and speak">🎤<span>Speak</span></button>
+      <input id="text" type="text" autocomplete="off" placeholder="…or type or paste here" aria-label="Type a message">
+      <button type="submit" class="send">Send</button>
+    </form>
+  </section>
+  <section class="right" aria-label="Card panel">
+    <div id="empty" class="empty">Nothing to show yet.<br>Ask me about a link, a message or a caller.</div>
+    <article id="card" class="card" hidden>
+      <div class="head"><span id="icon" class="icon" aria-hidden="true"></span><h1 id="title"></h1></div>
+      <div id="pending" class="pending" hidden>Taking a closer look…</div>
+      <img id="shot" class="shot" alt="Picture of the page, taken safely away from your phone" hidden>
+      <ul id="reasons" class="reasons"></ul>
+      <button id="action" class="action" hidden></button>
+    </article>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
