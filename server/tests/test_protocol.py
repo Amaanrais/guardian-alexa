@@ -6,6 +6,8 @@ from starlette.testclient import TestClient
 from server import app as app_module
 from server import config
 
+ALL_TOOLS = {"check_link", "get_link_report", "check_message", "verify_caller", "get_verification",
+             "start_incident", "next_step", "alert_family"}
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 
 
@@ -50,7 +52,7 @@ def test_any_proposed_version_gets_2025_11_25(client, version):
 def test_other_version_headers_are_served_not_rejected(client, version):
     resp = rpc(client, "tools/list", version=version)
     assert resp.status_code == 200
-    assert {t["name"] for t in resp.json()["result"]["tools"]} == {"check_link", "get_link_report", "check_message"}
+    assert {t["name"] for t in resp.json()["result"]["tools"]} == ALL_TOOLS
 
 
 def test_discover_says_method_not_found(client):
@@ -63,7 +65,7 @@ def test_discover_says_method_not_found(client):
 def test_tools_listed(client):
     resp = rpc(client, "tools/list")
     names = {t["name"] for t in resp.json()["result"]["tools"]}
-    assert names == {"check_link", "get_link_report", "check_message"}
+    assert names == ALL_TOOLS
 
 
 def test_call_check_link_over_http(client, fake_dns, fake_rdap, no_sandbox):
@@ -102,3 +104,33 @@ def test_screenshots_are_served(client, tmp_path, monkeypatch):
 def test_foreign_host_header_rejected(client):
     resp = client.post("/mcp", headers={**HEADERS, "Host": "evil.example"}, json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": init_params()})
     assert resp.status_code in (400, 421)
+
+
+def call(client, tool, args, id=1):
+    return rpc(client, "tools/call", {"name": tool, "arguments": args}, id=id).json()["result"]
+
+
+def test_recovery_tools_over_http(client):
+    start = call(client, "start_incident", {"description": "I gave someone my code"})["structuredContent"]
+    assert set(start) == {"incident_id", "playbook_title", "step"}
+    assert set(start["step"]) == {"text", "step_number", "total_steps"}  # no action on step 1: key omitted
+    steps = [call(client, "next_step", {"incident_id": start["incident_id"]})["structuredContent"] for _ in range(3)]
+    assert [set(s) for s in steps] == [{"step"}, {"step"}, {"done", "summary"}]
+
+    ask = call(client, "start_incident", {"description": "something odd happened"})["structuredContent"]
+    assert ask["incident_id"] is None and ask["step"]["step_number"] == 0
+
+
+def test_family_tools_over_http(client):
+    started = call(client, "verify_caller", {"name": "Rahul"})["structuredContent"]
+    assert started["status"] == "waiting" and started["verification_id"]
+    assert call(client, "get_verification", {"id": started["verification_id"]})["structuredContent"] == {"status": "waiting"}
+    assert call(client, "alert_family", {"reason": "test"})["structuredContent"] == {"sent": True, "recipients": ["Rahul"]}
+
+
+def test_spoken_errors_are_tool_errors(client):
+    res = call(client, "verify_caller", {"name": "Zed"})
+    assert res["isError"] is True
+    assert "I don't have Zed in your family circle yet." in res["content"][0]["text"]
+    res = call(client, "next_step", {"incident_id": "nope"})
+    assert res["isError"] is True and "can't find that recovery" in res["content"][0]["text"]

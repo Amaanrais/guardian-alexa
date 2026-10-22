@@ -11,6 +11,11 @@ fall back to `initialize`.
 | `check_link(url)` | Fast checks (< 500 ms): SSRF guard, punycode/look-alike vs. a brand list, RDAP domain age. Returns `{quick_verdict, reasons[], job_id}` and starts a background sandbox job. |
 | `get_link_report(job_id)` | `{status, verdict, reasons[], screenshot_path}`. `status` is `pending`/`running` (keep polling) or `done`/`error` (final). Links refused for pointing at a private address finish as `done`. `error` means an unknown or expired `job_id`, or a crashed check. `screenshot_path` is `/screens/<job_id>.png` on this server, or `null`. |
 | `check_message(text)` | Rule-based red flags (urgency, gift cards, OTP/PIN requests, impersonation, payment pressure), plus `check_link` on up to 5 URLs found in the text. Returns `{verdict, reasons[], job_ids[]}`, with one sandbox job per link. |
+| `start_incident(description)` | Picks a recovery playbook from `playbooks/` by keyword matching and returns step 1, or one clarifying question if nothing matches. Tells the family. |
+| `next_step(incident_id)` | The next step, or `{done, summary}` at the end. Progress is stored in `server/data/`. |
+| `verify_caller(name)` | Messages that family member on Telegram: "Are you calling Mum right now?" with Yes/No buttons. |
+| `get_verification(id)` | `waiting`, then `confirmed` or `denied`; `no_reply` after 120 seconds. |
+| `alert_family(reason)` | Messages everyone in the family circle. Recipients come from the server, never the caller. |
 
 Every verdict, for links and messages alike, is `Don't open this link`, `Be careful` or
 `No red flags found`. Nothing ever says "safe". The shapes follow `docs/CONTRACT.md`.
@@ -40,6 +45,12 @@ Settings (all optional, read from `.env`):
 | `GUARDIAN_BRANDS_FILE` | `server/brands.json` | Brand list (see below). |
 | `GUARDIAN_SCREENS_DIR` | `server/screens/` | Where sandbox screenshots go (S3 later). Git-ignored. |
 | `GUARDIAN_SANDBOX_CONCURRENCY` | `2` | Max Chromium instances at once. |
+| `GUARDIAN_PERSON_NAME` | `Mum` | Who Guardian protects, as the family knows them. |
+| `GUARDIAN_DATA_DIR` | `server/data/` | Family circle, incidents, call checks. Git-ignored. |
+| `TELEGRAM_BOT_TOKEN` | *(empty)* | Bot token from Telegram's @BotFather. Secret: never logged. |
+| `TELEGRAM_FAKE` | *(empty)* | `1` = no network: call checks answer "denied" after 3 s, alerts only log. |
+| `TELEGRAM_JOIN_CODE` | *(empty)* | If set, family members join with `/start <code>`. Recommended, so strangers who find the bot can't join. |
+| `LLM_PROVIDER` | `none` | `bedrock`, `anthropic`, `openai` or `none`. Interface only for now (`llm.py`). |
 
 ## Brand list
 
@@ -81,6 +92,25 @@ Card fields by themselves weigh too little to reach "Be careful". An honest chec
 "No red flags found", and card fields only add weight to other signals.
 
 "NordBank" (`nordbank.example`) is a fictional brand for demos.
+
+## Family messaging (Telegram)
+
+1. In Telegram, talk to **@BotFather**, send `/newbot`, and put the token in `.env` as
+   `TELEGRAM_BOT_TOKEN`. Set `TELEGRAM_JOIN_CODE` to something only the family knows.
+2. Start the server. It long-polls Telegram for messages and button presses while it runs.
+3. Each family member opens the bot and sends `/start <join code>`. Their Telegram first name is
+   the name to use in `verify_caller`, and they're stored in `server/data/family.json`.
+   Once a name is taken, another account can't take it over: that would let it answer call checks.
+
+No Telegram yet? Set `TELEGRAM_FAKE=1`. The family circle then has one demo member, "Rahul",
+whose call checks come back "denied" after 3 seconds.
+
+## Recovery playbooks
+
+`playbooks/<id>.json` holds `{id, title, family_summary?, match_phrases[], steps[]}`, where each
+step is `{text, action?}` (see `docs/CONTRACT.md`). Files are read on every call, so edits apply
+without a restart. The server refuses a playbook whose step asks for a password, code, PIN or
+card number. The two shipped playbooks have placeholder steps.
 
 ## Test
 
@@ -129,6 +159,10 @@ inspect --method tools/call --tool-name check_message --tool-arg 'text=URGENT: b
 | `sandbox.py` | Headless Chromium with a fresh context, 10 s budget, downloads off, service workers blocked, form submission disabled. |
 | `linkcheck.py` | The `check_link` fast path, the in-memory job store and `get_link_report`. |
 | `message.py` | Message rules and URL extraction. |
+| `recovery.py`, `playbooks.py` | `start_incident` / `next_step`, playbook loading, matching and the no-secrets check. |
+| `family.py` | Telegram: family circle, call checks, alerts, the update poller, token redaction. |
+| `storage.py` | Key-value storage interface: JSON files in `server/data/` now, DynamoDB later. |
+| `llm.py` | The `LLM_PROVIDER` setting. Interface only. |
 | `scoring.py` | Fixed weights and thresholds (≥ 60 is the top verdict, ≥ 25 is `Be careful`). The only place scores are set. |
 
 **How the sandbox stays contained.** Chromium never makes a network request of its own. Every

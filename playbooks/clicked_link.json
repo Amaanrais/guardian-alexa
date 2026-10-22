@@ -1,0 +1,37 @@
+{
+  "_status": "PLACEHOLDER steps: replace with the real text before the demo",
+  "id": "clicked_link",
+  "title": "I clicked a link and typed my password",
+  "family_summary": "clicked a link and typed a password",
+  "match_phrases": [
+    "clicked a link",
+    "clicked the link",
+    "opened a link",
+    "tapped a link",
+    "typed my password",
+    "entered my password",
+    "put in my password",
+    "logged in",
+    "signed in",
+    "password",
+    "link"
+  ],
+  "steps": [
+    {
+      "text": "Close that page now. Don't type anything else into it."
+    },
+    {
+      "text": "Change the password for that account, using the app or website you normally use."
+    },
+    {
+      "text": "If you use the same password anywhere else, change it there too. Rahul can help you.",
+      "action": {
+        "label": "Ask Rahul for help",
+        "tool": "alert_family",
+        "args": {
+          "reason": "Mum may need help changing passwords after clicking a link."
+        }
+      }
+    }
+  ]
+}

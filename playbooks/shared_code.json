@@ -1,0 +1,33 @@
+{
+  "_status": "PLACEHOLDER steps: replace with the real text before the demo",
+  "id": "shared_code",
+  "title": "I gave someone my code / OTP / PIN",
+  "family_summary": "shared a code",
+  "match_phrases": [
+    "gave someone my code",
+    "shared a code",
+    "shared my code",
+    "told them my code",
+    "read out the code",
+    "gave my pin",
+    "told them my pin",
+    "otp",
+    "one-time code",
+    "verification code",
+    "security code",
+    "pin",
+    "bank code",
+    "gave the code"
+  ],
+  "steps": [
+    {
+      "text": "Call your bank now, using the number on the back of your card."
+    },
+    {
+      "text": "Ask them to block your card and stop any payments you didn't make."
+    },
+    {
+      "text": "Over the next few days, check your bank account. Call the bank about anything you don't recognise."
+    }
+  ]
+}

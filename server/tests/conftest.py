@@ -3,12 +3,26 @@ import socket
 
 import pytest
 
-from server import linkcheck, netguard, rdap
+from server import config, family, linkcheck, netguard, rdap, storage
 
 
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def _family_sandbox(tmp_path, monkeypatch):
+    """Every test gets its own data folder and fake Telegram: no network, no real family."""
+    storage.set_store(storage.JsonFileStore(tmp_path / "data"))
+    monkeypatch.setattr(config, "TELEGRAM_FAKE", True)
+    monkeypatch.setattr(config, "TELEGRAM_BOT_TOKEN", "")
+    monkeypatch.setattr(config, "TELEGRAM_JOIN_CODE", "")
+    monkeypatch.setattr(config, "FAKE_ANSWER_DELAY_S", 0.05)
+    family.set_telegram(None)
+    yield
+    storage.set_store(None)
+    family.set_telegram(None)
 
 
 @pytest.fixture(autouse=True)
