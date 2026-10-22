@@ -147,4 +147,4 @@ async def test_check_link_refuses_private_targets_without_sandbox(url, fake_dns,
     assert out["quick_verdict"] != "No red flags found"
     assert any("private" in r for r in out["reasons"])
     assert no_sandbox == []
-    assert linkcheck.get_link_report(out["job_id"])["status"] == "blocked"
+    assert linkcheck.get_link_report(out["job_id"])["status"] == "done"

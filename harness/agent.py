@@ -136,7 +136,7 @@ async def _bedrock(text: str, client, st: dict, trace: list) -> str:
 
 
 def _url() -> str:
-    return os.getenv("MCP_URL", "http://localhost:8000/mcp")
+    return os.getenv("MCP_URL", "http://localhost:8765/mcp")
 
 
 async def respond(sid: str, text: str) -> dict:

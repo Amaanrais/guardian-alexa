@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import Literal
 
 import uvicorn
@@ -9,10 +10,12 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import ToolAnnotations
 from pydantic import BaseModel
+from starlette.requests import Request
+from starlette.responses import FileResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import config, linkcheck, message
-from .scoring import LinkVerdict, MessageVerdict
+from .scoring import LinkVerdict
 
 log = logging.getLogger(__name__)
 
@@ -35,20 +38,16 @@ class LinkCheck(BaseModel):
 
 
 class LinkReport(BaseModel):
-    status: Literal["pending", "running", "done", "blocked", "not_found"]
+    status: Literal["pending", "running", "done", "error"]
     verdict: LinkVerdict
     reasons: list[str]
-    screenshot_path: str | None
-
-
-class MessageLink(LinkCheck):
-    url: str
+    screenshot_path: str | None  # path on this server, e.g. /screens/<job_id>.png
 
 
 class MessageCheck(BaseModel):
-    verdict: MessageVerdict
+    verdict: LinkVerdict
     reasons: list[str]
-    links: list[MessageLink]
+    job_ids: list[str]  # one sandbox job per link found, for get_link_report
 
 
 @mcp.tool(annotations=_READ_ONLY)
@@ -62,7 +61,10 @@ async def check_link(url: str) -> LinkCheck:
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_link_report(job_id: str) -> LinkReport:
-    """Get the full report for a link check started by check_link. Poll until status is not pending/running."""
+    """Get the full report for a link check started by check_link.
+
+    Poll while status is pending or running; done and error are final.
+    """
     return LinkReport.model_validate(linkcheck.get_link_report(job_id))
 
 
@@ -70,6 +72,19 @@ async def get_link_report(job_id: str) -> LinkReport:
 async def check_message(text: str) -> MessageCheck:
     """Check a text message or email for common scam red flags, including any links inside it."""
     return MessageCheck.model_validate(await message.check_message(text))
+
+
+_SCREENSHOT_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}\.png$")
+
+
+@mcp.custom_route("/screens/{name}", methods=["GET"])
+async def screenshot(request: Request) -> Response:
+    """Serves sandbox screenshots. Names are unguessable job ids; nothing else is reachable."""
+    name = request.path_params["name"]
+    path = config.SCREENS_DIR / name
+    if not _SCREENSHOT_NAME.match(name) or not path.is_file():
+        return Response(status_code=404)
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 class ProtocolNegotiation:

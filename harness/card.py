@@ -43,7 +43,7 @@ def _shot_url(path: str | None) -> str | None:
         return None
     if re.match(r"https?://", path):
         return path
-    base = os.getenv("SCREENSHOT_BASE_URL") or re.sub(r"/mcp/?$", "", os.getenv("MCP_URL", "http://localhost:8000/mcp"))
+    base = os.getenv("SCREENSHOT_BASE_URL") or re.sub(r"/mcp/?$", "", os.getenv("MCP_URL", "http://localhost:8765/mcp"))
     return base.rstrip("/") + "/" + path.lstrip("/")
 
 

@@ -227,4 +227,12 @@ async def test_full_job_report(run_job, tmp_path):
     assert report["status"] == "done"
     assert report["verdict"] == "Don't open this link"
     assert "The page asks for bank card details." in report["reasons"]
-    assert report["screenshot_path"] == str(tmp_path / f"{out['job_id']}.png")
+    assert report["screenshot_path"] == f"/screens/{out['job_id']}.png"
+    assert (tmp_path / f"{out['job_id']}.png").is_file()
+
+
+async def test_redirect_to_private_ip_job_finishes_as_done(run_job):
+    _, report = await run_job("http://start.test/")
+    assert report["status"] == "done"
+    assert report["verdict"] != "No red flags found"
+    assert report["screenshot_path"] is None

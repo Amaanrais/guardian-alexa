@@ -91,7 +91,7 @@ async def test_report_while_pending_and_unknown(fake_dns, fake_rdap, no_sandbox)
     report = linkcheck.get_link_report(out["job_id"])
     assert report["status"] == "pending"
     assert report["screenshot_path"] is None
-    assert linkcheck.get_link_report("nope")["status"] == "not_found"
+    assert linkcheck.get_link_report("nope")["status"] == "error"
 
 
 async def test_never_says_safe(fake_dns, fake_rdap, no_sandbox):
@@ -134,3 +134,18 @@ def test_payment_brand_flags_and_common_word_domains():
     assert {"PayPal", "Visa", "Mastercard", "American Express", "Apple Pay", "Google Pay", "Klarna"} <= payment
     assert brand_signals("uk-visa-help.com") == []  # "visa" is an ordinary word in domains
     assert [s.code for s in brand_signals("amex-verify.com")] == ["brand_in_unofficial_domain"]
+
+
+async def test_job_ids_are_128_bit_random_tokens(fake_dns, fake_rdap, no_sandbox, monkeypatch):
+    import base64
+    import secrets
+
+    calls = []
+    real = secrets.token_urlsafe
+    monkeypatch.setattr(secrets, "token_urlsafe", lambda n: calls.append(n) or real(n))
+    fake_dns["shop.test"] = ["93.184.215.14"]
+    ids = {(await linkcheck.check_link("https://shop.test/"))["job_id"] for _ in range(50)}
+    assert calls and all(n >= 16 for n in calls)  # secrets module, >= 128 bits
+    assert len(ids) == 50
+    for job_id in ids:
+        assert len(base64.urlsafe_b64decode(job_id + "==")) >= 16

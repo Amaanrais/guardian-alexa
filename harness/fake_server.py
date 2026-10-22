@@ -1,6 +1,6 @@
 """Stand-in Guardian MCP server returning canned responses in the CONTRACT.md format.
 
-    python harness/fake_server.py     # serves http://localhost:8000/mcp
+    python harness/fake_server.py     # serves http://localhost:8765/mcp
 """
 import time
 
@@ -65,4 +65,4 @@ def alert_family(reason: str) -> dict:
 
 
 if __name__ == "__main__":
-    uvicorn.run(m.streamable_http_app(), port=8000, log_level="warning")
+    uvicorn.run(m.streamable_http_app(), port=8765, log_level="warning")

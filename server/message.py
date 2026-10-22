@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from urllib.parse import urlsplit
 
 from . import linkcheck, scoring
 from .scoring import Signal
@@ -87,13 +88,13 @@ async def check_message(text: str) -> dict:
     signals = message_signals(text)
     urls = extract_urls(text)
     link_results = await asyncio.gather(*(linkcheck.check_link(u) for u in urls))
-    links = [{"url": u, **{k: v for k, v in r.items() if k != "level"}} for u, r in zip(urls, link_results)]
     reasons = scoring.reasons(signals)
-    for link in links:
-        if link["quick_verdict"] != "No red flags found":
-            reasons.append(f"A link in the message looks risky: {link['quick_verdict']}.")
+    for url, result in zip(urls, link_results):
+        if result["reasons"] and result["quick_verdict"] != "No red flags found":
+            host = urlsplit(url).hostname or url
+            reasons.append(f"The link to {host} has a warning sign: {result['reasons'][0]}")
     return {
         "verdict": scoring.message_verdict(signals, [r["level"] for r in link_results]),
         "reasons": reasons,
-        "links": links,
+        "job_ids": [r["job_id"] for r in link_results],
     }

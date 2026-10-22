@@ -4,6 +4,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from server import app as app_module
+from server import config
 
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 
@@ -72,7 +73,30 @@ def test_call_check_link_over_http(client, fake_dns, fake_rdap, no_sandbox):
     out = result["structuredContent"]
     assert set(out) == {"quick_verdict", "reasons", "job_id"}
     report = rpc(client, "tools/call", {"name": "get_link_report", "arguments": {"job_id": out["job_id"]}}, id=2)
-    assert report.json()["result"]["structuredContent"]["status"] == "blocked"
+    report = report.json()["result"]["structuredContent"]
+    assert report["status"] == "done"  # refused up front is a finished check, so the harness stops polling
+    assert set(report) == {"status", "verdict", "reasons", "screenshot_path"}
+
+
+def test_call_check_message_matches_contract(client, fake_dns, fake_rdap, no_sandbox):
+    fake_dns["paypa1.com"] = ["93.184.215.14"]
+    text = "Your account is locked, act now: https://paypa1.com/verify"
+    resp = rpc(client, "tools/call", {"name": "check_message", "arguments": {"text": text}})
+    out = resp.json()["result"]["structuredContent"]
+    assert set(out) == {"verdict", "reasons", "job_ids"}
+    assert out["verdict"] in ("Don't open this link", "Be careful", "No red flags found")
+    assert len(out["job_ids"]) == 1
+
+
+def test_screenshots_are_served(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SCREENS_DIR", tmp_path)
+    (tmp_path / "abc_DEF-123.png").write_bytes(b"\x89PNG fake")
+    (tmp_path / "notes.txt").write_text("secret")
+    resp = client.get("/screens/abc_DEF-123.png")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    for bad in ["missing.png", "notes.txt", "..%2Fconfig.py", "..%2F..%2F.env", "%2Fetc%2Fpasswd"]:
+        assert client.get(f"/screens/{bad}").status_code == 404, bad
 
 
 def test_foreign_host_header_rejected(client):

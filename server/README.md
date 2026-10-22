@@ -9,11 +9,14 @@ fall back to `initialize`.
 | Tool | What it does |
 |---|---|
 | `check_link(url)` | Fast checks (< 500 ms): SSRF guard, punycode/look-alike vs. a brand list, RDAP domain age. Returns `{quick_verdict, reasons[], job_id}` and starts a background sandbox job. |
-| `get_link_report(job_id)` | `{status, verdict, reasons[], screenshot_path}`. `status` is `pending`, `running`, `done`, `blocked` or `not_found`. |
-| `check_message(text)` | Rule-based red flags (urgency, gift cards, OTP/PIN requests, impersonation, payment pressure), plus `check_link` on up to 5 URLs found in the text. Returns `{verdict, reasons[], links[]}`. |
+| `get_link_report(job_id)` | `{status, verdict, reasons[], screenshot_path}`. `status` is `pending`/`running` (keep polling) or `done`/`error` (final). Links refused for pointing at a private address finish as `done`. `error` means an unknown or expired `job_id`, or a crashed check. `screenshot_path` is `/screens/<job_id>.png` on this server, or `null`. |
+| `check_message(text)` | Rule-based red flags (urgency, gift cards, OTP/PIN requests, impersonation, payment pressure), plus `check_link` on up to 5 URLs found in the text. Returns `{verdict, reasons[], job_ids[]}`, with one sandbox job per link. |
 
-Link verdicts are `Don't open this link`, `Be careful` or `No red flags found`. Message verdicts
-are `Don't trust this message`, `Be careful` or `No red flags found`. Nothing ever says "safe".
+Every verdict, for links and messages alike, is `Don't open this link`, `Be careful` or
+`No red flags found`. Nothing ever says "safe". The shapes follow `docs/CONTRACT.md`.
+
+`GET /screens/<job_id>.png` serves sandbox screenshots. Only names made of job-id characters
+ending in `.png` are served, and the job ids are random and unguessable.
 
 ## Run
 

@@ -1,6 +1,7 @@
 """check_link fast path, the background sandbox job store, and get_link_report."""
 
 import asyncio
+import logging
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -11,8 +12,13 @@ from .lookalike import brand_signals, claimed_brands, registrable_domain, url_si
 from .netguard import BlockedURLError, parse_url, resolve_public
 from .scoring import Signal
 
-JobStatus = Literal["pending", "running", "done", "blocked", "not_found"]
+# The values docs/CONTRACT.md defines: pending/running mean keep polling, done/error mean stop.
+JobStatus = Literal["pending", "running", "done", "error"]
 
+log = logging.getLogger(__name__)
+
+# Job ids are bearer tokens: anyone holding one can load its screenshot from /screens/.
+JOB_ID_BYTES = 16  # 128 bits from the OS CSPRNG
 JOB_TTL_S = 3600
 ACCOUNT_SECRETS = {"password", "pin", "otp"}
 MAX_JOBS = 1000
@@ -24,7 +30,7 @@ class Job:
     quick_signals: list[Signal]
     status: JobStatus = "pending"
     sandbox_signals: list[Signal] = field(default_factory=list)
-    screenshot_path: str | None = None
+    screenshot_path: str | None = None  # URL path, e.g. /screens/<job_id>.png
     created: float = field(default_factory=time.monotonic)
 
 
@@ -116,21 +122,28 @@ async def _run_job(job_id: str) -> None:
     global _semaphore
     job = _jobs[job_id]
     _semaphore = _semaphore or asyncio.Semaphore(config.SANDBOX_CONCURRENCY)
-    async with _semaphore:
-        job.status = "running"
-        result = await sandbox.run_sandbox(job.url, config.SCREENS_DIR / f"{job_id}.png")
-    signals = _sandbox_signals(result, job.url)
-    if result.final_domain and registrable_domain(result.final_domain) != registrable_domain(parse_url(job.url).host):
-        signals += _age_signals(await rdap.domain_age_days(registrable_domain(result.final_domain)))
+    try:
+        async with _semaphore:
+            job.status = "running"
+            result = await sandbox.run_sandbox(job.url, config.SCREENS_DIR / f"{job_id}.png")
+        signals = _sandbox_signals(result, job.url)
+        if result.final_domain and registrable_domain(result.final_domain) != registrable_domain(parse_url(job.url).host):
+            signals += _age_signals(await rdap.domain_age_days(registrable_domain(result.final_domain)))
+    except Exception:
+        log.exception("link job %s failed", job_id)
+        job.status = "error"
+        return
     job.sandbox_signals = signals
-    job.screenshot_path = result.screenshot_path
-    job.status = "blocked" if result.blocked_url else "done"
+    if result.screenshot_path:
+        job.screenshot_path = f"/screens/{job_id}.png"  # served by app.py, relative to the server origin
+    # A blocked hop is a finished check: the verdict and reasons say why.
+    job.status = "done"
 
 
 async def check_link(url: str) -> dict:
     signals, sandbox_allowed = await quick_check(url)
     _prune()
-    job_id = secrets.token_urlsafe(12)
+    job_id = secrets.token_urlsafe(JOB_ID_BYTES)
     job = Job(url=url.strip(), quick_signals=signals)
     _jobs[job_id] = job
     if sandbox_allowed:
@@ -138,7 +151,7 @@ async def check_link(url: str) -> dict:
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
     else:
-        job.status = "blocked"
+        job.status = "done"  # refused up front; the reasons say why
     return {
         "quick_verdict": scoring.link_verdict(signals),
         "reasons": scoring.reasons(signals),
@@ -151,7 +164,7 @@ def get_link_report(job_id: str) -> dict:
     job = _jobs.get(job_id)
     if job is None:
         return {
-            "status": "not_found",
+            "status": "error",
             "verdict": "Be careful",
             "reasons": ["We don't have a report for this check. It may have expired; please check the link again."],
             "screenshot_path": None,

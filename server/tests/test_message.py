@@ -40,19 +40,19 @@ async def test_classic_scam_message(fake_dns, fake_rdap, no_sandbox):
     out = await message.check_message(
         "Amazon: your account is locked. Act now and pay the fee with a gift card. Call us immediately."
     )
-    assert out["verdict"] == "Don't trust this message"
-    assert out["links"] == []
+    assert out["verdict"] == "Don't open this link"
+    assert out["job_ids"] == []
 
 
 async def test_risky_link_escalates_harmless_text(fake_dns, fake_rdap, no_sandbox):
     fake_dns["paypa1.com"] = ["93.184.215.14"]
     out = await message.check_message("hey, is this you? https://paypa1.com/photo")
-    assert out["verdict"] == "Don't trust this message"
-    assert out["links"][0]["quick_verdict"] == "Don't open this link"
-    assert out["links"][0]["job_id"]
+    assert out["verdict"] == "Don't open this link"
+    assert out["reasons"] == ["The link to paypa1.com has a warning sign: The web address imitates paypal.com but isn't the real site."]
+    assert len(out["job_ids"]) == 1
     assert len(no_sandbox) == 1
 
 
 async def test_ordinary_message(fake_dns, fake_rdap, no_sandbox):
     out = await message.check_message("Running 10 minutes late, save me a seat")
-    assert out == {"verdict": "No red flags found", "reasons": [], "links": []}
+    assert out == {"verdict": "No red flags found", "reasons": [], "job_ids": []}

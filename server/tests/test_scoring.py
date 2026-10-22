@@ -27,10 +27,10 @@ def test_reasons_sorted_by_weight():
 
 
 def test_message_verdict_takes_worst_of_text_and_links():
-    assert scoring.message_verdict([], [2]) == "Don't trust this message"
+    assert scoring.message_verdict([], [2]) == "Don't open this link"
     assert scoring.message_verdict([Signal("gift_card", "g")], [0]) == "Be careful"
 
 
 def test_no_verdict_says_safe():
-    for v in scoring.LINK_VERDICTS + scoring.MESSAGE_VERDICTS:
+    for v in scoring.LINK_VERDICTS:
         assert "safe" not in v.lower()

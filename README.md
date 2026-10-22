@@ -10,16 +10,16 @@ and a small FastAPI backend whose agent connects to the Guardian MCP server as a
 
 ```bash
 source venv/bin/activate && pip install -r requirements.txt
-# terminal 1: Guardian MCP server on http://localhost:8000/mcp
+# terminal 1: Guardian MCP server on http://localhost:8765/mcp
 # terminal 2:
 cd harness
-MCP_URL=http://localhost:8000/mcp uvicorn app:app --port 8080
+MCP_URL=http://localhost:8765/mcp uvicorn app:app --port 8080
 ```
 Open http://localhost:8080 in **Chrome or Edge** (Web Speech API; other browsers get typing only).
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `MCP_URL` | `http://localhost:8000/mcp` | Guardian MCP server |
+| `MCP_URL` | `http://localhost:8765/mcp` | Guardian MCP server |
 | `USE_BEDROCK` | `0` | `1` = Bedrock Converse tool use; otherwise keyword-routed mock mode (no AWS) |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | `us-east-1`, a Claude model id | Bedrock settings (needs AWS credentials + model access) |
 
@@ -43,4 +43,4 @@ object or flat fields: `verdict`/`level` (high|medium|none), `reasons[]`, `scree
 Adjust `card.py` once the contract is final.
 
 ### No server yet?
-`python harness/fake_server.py` serves canned responses in the `docs/CONTRACT.md` format on `http://localhost:8000/mcp`.
+`python harness/fake_server.py` serves canned responses in the `docs/CONTRACT.md` format on `http://localhost:8765/mcp`.

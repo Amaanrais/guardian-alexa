@@ -37,7 +37,7 @@ async def action(body: Action):
 
 @app.get("/api/health")
 async def health():
-    return {"mcp_url": os.getenv("MCP_URL", "http://localhost:8000/mcp"),
+    return {"mcp_url": os.getenv("MCP_URL", "http://localhost:8765/mcp"),
             "mode": "bedrock" if os.getenv("USE_BEDROCK") == "1" else "mock"}
 
 

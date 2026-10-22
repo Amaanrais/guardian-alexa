@@ -7,17 +7,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 LinkVerdict = Literal["Don't open this link", "Be careful", "No red flags found"]
-MessageVerdict = Literal["Don't trust this message", "Be careful", "No red flags found"]
-
 LINK_VERDICTS: tuple[LinkVerdict, LinkVerdict, LinkVerdict] = (
     "No red flags found",
     "Be careful",
     "Don't open this link",
-)
-MESSAGE_VERDICTS: tuple[MessageVerdict, MessageVerdict, MessageVerdict] = (
-    "No red flags found",
-    "Be careful",
-    "Don't trust this message",
 )
 
 CAREFUL_THRESHOLD = 25
@@ -96,5 +89,6 @@ def link_verdict(signals: list[Signal]) -> LinkVerdict:
     return LINK_VERDICTS[level(signals)]
 
 
-def message_verdict(message_signals: list[Signal], link_levels: list[int]) -> MessageVerdict:
-    return MESSAGE_VERDICTS[max([level(message_signals), *link_levels])]
+def message_verdict(message_signals: list[Signal], link_levels: list[int]) -> LinkVerdict:
+    """Messages share the link verdicts (docs/CONTRACT.md); the worst of text and links wins."""
+    return LINK_VERDICTS[max([level(message_signals), *link_levels])]
