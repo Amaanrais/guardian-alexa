@@ -30,8 +30,10 @@ INJECTION_RE = re.compile(
     r"(trick|fool|manipulate) (the |an )?(ai|assistant|chatbot)",
     re.I,
 )
-# The demo family contact, with the pronoun they use. Unknown names get "them".
+# The demo family circle. FAMILY is who "Tell ..." alerts; pronouns are only listed where
+# known, everyone else gets "them".
 FAMILY = "Rahul"
+FAMILY_CIRCLE = ["Rahul", "Mum"]
 PRONOUNS = {"Rahul": "him"}
 VERIFY_STATUSES = ("confirmed", "denied", "no_reply")
 

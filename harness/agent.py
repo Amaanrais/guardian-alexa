@@ -3,6 +3,7 @@ import asyncio
 import os
 import re
 
+import history
 from card import FAMILY, build_card, speech, start_recovery
 from mcp_client import connect, parse_result, tool_specs
 
@@ -49,6 +50,8 @@ async def _call(client, tool: str, args: dict, st: dict, trace: list) -> dict:
     card = build_card(tool, data, st["card"], args)
     if card:
         st["card"] = card
+    if card and card["kind"] in ("link", "message") and not card["pending"]:
+        history.record(card)
     if card and card["kind"] == "recovery" and card["recovery"]["done"]:
         # The finished-recovery card says the family has been told, so tell them.
         sent = await _call(client, "alert_family", {"reason": "Finished every recovery step after a possible scam."}, st, trace)

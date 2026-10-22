@@ -7,64 +7,19 @@
 <title>Guardian · Echo Show</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <div class="stage">
-  <main class="device" aria-label="Simulated Echo Show running Guardian">
-    <div class="camera" aria-hidden="true"></div>
-    <div class="screen">
-      <header class="statusbar">
-        <div class="brand">
-          <svg class="brand-mark" aria-hidden="true"><use href="#i-shield-check"/></svg>
-          <span class="brand-name">Guardian</span>
-        </div>
-        <div class="status">
-          <!-- debug only (?debug=1) -->
-          <span id="conn" class="chip" title="Connection to the Guardian MCP server" hidden><span class="dot"></span><span id="conn-text">Connecting…</span></span>
-          <span id="mode" class="chip" hidden></span>
-          <time id="clock" class="clock" data-clock hidden></time>
-        </div>
-      </header>
-
-      <div class="panes">
-        <section class="pane convo" aria-label="Conversation">
-          <div id="transcript" class="transcript" role="log" aria-live="polite" aria-relevant="additions">
-            <div class="msg bot">
-              <span class="avatar" aria-hidden="true"><svg><use href="#i-shield"/></svg></span>
-              <p class="bubble">Hello. I'm Guardian. I can check a link or message, find out if a caller is really family, or help if you already shared a code.</p>
-            </div>
-          </div>
-
-          <div class="suggestions" id="suggestions" aria-label="Things you can say">
-            <button type="button" class="suggest" data-say="Is this a scam? http://secure-bank.example/login"><svg aria-hidden="true"><use href="#i-link"/></svg>Check a link</button>
-            <button type="button" class="suggest" data-say="Is that really Rahul calling?"><svg aria-hidden="true"><use href="#i-phone"/></svg>Is it really Rahul?</button>
-            <button type="button" class="suggest" data-say="I gave someone my bank code"><svg aria-hidden="true"><use href="#i-lifebuoy"/></svg>I shared a code</button>
-          </div>
-
-          <form id="form" class="composer">
-            <button type="button" id="mic" class="mic" aria-label="Tap and speak" aria-pressed="false">
-              <span class="ring" aria-hidden="true"></span>
-              <svg aria-hidden="true"><use href="#i-mic"/></svg>
-            </button>
-            <div id="voice" class="voice" role="status" hidden>
-              <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-              <span id="voice-text">Listening…</span>
-            </div>
-            <label class="sr-only" for="text">Type or paste a message</label>
-            <input id="text" type="text" autocomplete="off" placeholder="Tap the mic, or type here">
-            <button type="submit" class="send" aria-label="Send"><svg aria-hidden="true"><use href="#i-send"/></svg></button>
-          </form>
-
-          <p class="promise"><svg aria-hidden="true"><use href="#i-lock"/></svg>Guardian never asks for passwords, codes or PINs.</p>
-        </section>
-
-        <section id="cardpane" class="pane cardpane" aria-label="Result" aria-live="polite"></section>
-      </div>
-    </div>
-  </main>
-  <p class="caption">Simulated Alexa+ on Echo Show · talking to the real Guardian MCP server</p>
+  <div class="product">
+    <main class="device" aria-label="Simulated smart display running Guardian">
+      <div class="cams" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="screen-slot" id="screen-slot"></div>
+    </main>
+    <div class="base" aria-hidden="true"></div>
+  </div>
+  <p class="caption">Simulated smart display · talking to the real Guardian MCP server</p>
 </div>
 <script src="/static/cards.js"></script>
 <script src="/static/app.js"></script>

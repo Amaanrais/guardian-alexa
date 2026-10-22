@@ -1,87 +1,104 @@
-const $ = id => document.getElementById(id);
-const {build, key, idle, tickClocks, svg} = window.GuardianCards;
+const {screen, home, build, key, weather, tickClocks, svg} = window.GuardianCards;
 const sid = (() => { try { return localStorage.guardianSid ||= crypto.randomUUID(); } catch { return crypto.randomUUID(); } })();
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const URL_RE = /(https?:\/\/\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\/\S*)/i;
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
-const POLL_MS = 3000, VERIFY_GIVE_UP_MS = 120000;
-let rec = null, busy = false, current = null, currentKey = null, polling = null, renderSeq = 0;
+const POLL_MS = 3000, VERIFY_GIVE_UP_MS = 120000, WEATHER_MS = 15 * 60000;
 
-/* ---------- transcript ---------- */
+const root = screen();
+document.getElementById('screen-slot').replaceWith(root);
+const q = sel => root.querySelector(sel);
+const view = q('[data-view]'), input = q('[data-input]'), line = q('[data-line]'), bar = q('[data-voicebar]');
+
+let rec = null, busy = false, current = null, currentKey = null, polling = null, renderSeq = 0, unseen = 0;
+
+/* ---------- transcript sheet and voice bar ---------- */
 function addMsg(text, who) {
   const row = document.createElement('div');
   row.className = 'msg ' + who;
-  if (who !== 'user') row.innerHTML = `<span class="avatar" aria-hidden="true">${svg('i-shield')}</span>`;
   const p = document.createElement('p');
   p.className = 'bubble';
   p.textContent = text;
   row.append(p);
-  $('transcript').append(row);
+  q('[data-transcript]').append(row);
   row.scrollIntoView({block: 'end', behavior: REDUCED.matches ? 'auto' : 'smooth'});
+  if (who === 'bot' || who === 'user') setLine(text, who);
   return row;
 }
 
-function typing(on) {
-  document.querySelector('.msg.typing')?.remove();
-  if (on) addMsg('', 'bot typing').querySelector('.bubble').innerHTML = '<i></i><i></i><i></i>';
+function setLine(text, who) {
+  line.textContent = who === 'user' ? `You: ${text}` : text;
 }
 
-function interim(text) {
-  let row = document.querySelector('.msg.interim');
-  if (!text) { row?.remove(); return; }
-  row ||= addMsg('', 'user interim');
-  row.querySelector('.bubble').textContent = text;
-}
-
-/* ---------- voice: waveform while listening or speaking ---------- */
 function voice(state) {
-  const v = $('voice');
-  v.hidden = !state;
-  $('text').hidden = !!state;
-  v.className = 'voice' + (state ? ' ' + state : '');
-  $('voice-text').textContent = state === 'listening' ? 'Listening…' : 'Guardian is speaking…';
+  bar.classList.toggle('listening', state === 'listening');
+  bar.classList.toggle('speaking', state === 'speaking');
+  if (state === 'listening') line.textContent = 'Listening…';
 }
 
-function speak(text, row) {
+function sheet(open, focus = false) {
+  q('[data-sheet]').hidden = !open;
+  q('[data-expand]').setAttribute('aria-expanded', String(open));
+  root.classList.toggle('sheet-open', open);
+  if (open) q('[data-transcript]').lastElementChild?.scrollIntoView({block: 'end'});
+  if (open && focus) input.focus();
+}
+
+function speak(text) {
   if (!text || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.92;
-  const pick = speechSynthesis.getVoices().find(v => /en[-_]US/.test(v.lang) && /Samantha|Google US|Aria|Jenny/.test(v.name));
+  const pick = speechSynthesis.getVoices().find(v => /en[-_](US|GB)/.test(v.lang) && /Samantha|Google|Aria|Jenny|Serena|Daniel/.test(v.name));
   if (pick) u.voice = pick;
-  const av = row?.querySelector('.avatar');
-  u.onstart = () => { av?.classList.add('speaking'); if (!rec) voice('speaking'); };
-  u.onend = u.onerror = () => { av?.classList.remove('speaking'); if (!rec) voice(null); };
+  u.onstart = () => { if (!rec) voice('speaking'); };
+  u.onend = u.onerror = () => { if (!rec) voice(null); };
   speechSynthesis.speak(u);
 }
 
-function say(text) { if (text) speak(text, addMsg(text, 'bot')); }
+function say(text) { if (text) { addMsg(text, 'bot'); speak(text); } }
 
-/* ---------- card pane ---------- */
+/* ---------- view: home screen or a full-screen card ---------- */
 const handlers = {
   action: (card, b) => runAction(card.action, b),
   next: (card, b) => { b.disabled = true; act('next_step', {incident_id: card.recovery.incident_id}).finally(() => { b.disabled = false; }); },
   repeat: card => say(card.recovery.text),
+  home: () => render(null),
 };
 
+async function homeData() {
+  try { return await (await fetch('/api/home')).json(); } catch { return {mcp_ok: false}; }
+}
+
 function render(card) {
-  const pane = $('cardpane');
   const k = key(card);
-  const next = card ? build(card, handlers) : idle();
+  const changed = k !== currentKey;
   current = card;
-  $('clock').hidden = !card;  // the idle panel already shows a big clock
-  const old = pane.firstElementChild;
-  const seq = ++renderSeq;
-  if (!old || k === currentKey || REDUCED.matches) {
-    pane.replaceChildren(next);  // same state (e.g. a button changed): no animation
-  } else {
-    // 200 ms fade out, then the new card slides in (CSS .enter, 260 ms)
-    old.classList.add('leave');
-    setTimeout(() => { if (seq === renderSeq) { next.classList.add('enter'); pane.replaceChildren(next); } }, 200);
-  }
   currentKey = k;
+  root.classList.toggle('on-home', !card);
+  if (!card) { unseen = 0; bell(); }
+  const next = card ? build(card, handlers) : home(lastHome);
+  swap(next, changed);
+  if (!card) homeData().then(d => { lastHome = d; if (!current) swap(home(d), false); });
   watchVerification(card);
+}
+let lastHome = {};
+
+function swap(next, animate) {
+  const old = view.firstElementChild;
+  const seq = ++renderSeq;
+  if (!old || !animate || REDUCED.matches) { view.replaceChildren(next); return; }
+  // 200 ms fade out, then the new view slides in (CSS .enter, 260 ms)
+  old.classList.add('leave');
+  setTimeout(() => { if (seq === renderSeq) { next.classList.add('enter'); view.replaceChildren(next); } }, 200);
+}
+
+function bell() {
+  const c = q('.bell-count');
+  c.hidden = !unseen;
+  c.textContent = unseen;
+  q('.bell').setAttribute('aria-label', unseen ? `Recent checks, ${unseen} new` : 'Recent checks');
 }
 
 function pendingCard(host) {
@@ -121,17 +138,25 @@ async function post(path, body) {
 function handle(res) {
   typing(false);
   if (res.error && DEBUG) addMsg(res.error, 'err');
-  if (res.card) render(res.card);
+  if (res.card) {
+    const finished = ['link', 'message'].includes(res.card.kind) && !res.card.pending && key(res.card) !== currentKey;
+    if (finished) { unseen++; bell(); }
+    render(res.card);
+  }
   say(res.reply);
+}
+
+function typing(on) {
+  q('.msg.typing')?.remove();
+  if (on) { addMsg('', 'bot typing').querySelector('.bubble').innerHTML = '<i></i><i></i><i></i>'; line.textContent = 'Thinking…'; }
 }
 
 async function send(text) {
   text = text.trim();
   if (!text || busy) return;
   busy = true;
-  interim('');
   addMsg(text, 'user');
-  $('text').value = '';
+  input.value = '';
   const url = text.match(URL_RE);
   if (url) {
     let host = '';
@@ -165,10 +190,14 @@ async function runAction(a, b) {
 }
 
 /* ---------- inputs ---------- */
-$('form').onsubmit = e => { e.preventDefault(); send($('text').value); };
-document.querySelectorAll('.suggest').forEach(b => { b.onclick = () => send(b.dataset.say); });
+q('[data-form]').onsubmit = e => { e.preventDefault(); send(input.value); };
+root.querySelectorAll('[data-say]').forEach(b => { b.onclick = () => send(b.dataset.say); });
+root.querySelectorAll('[data-nav="home"]').forEach(b => { b.onclick = () => { sheet(false); render(null); }; });
+q('[data-expand]').onclick = () => sheet(q('[data-sheet]').hidden);
+q('[data-type]').onclick = () => sheet(true, true);
+q('[data-collapse]').onclick = () => sheet(false);
 
-const mic = $('mic');
+const mic = q('[data-mic]');
 if (!SR) {
   mic.disabled = true;
   mic.title = 'Speaking needs Chrome or Edge. You can type instead.';
@@ -182,7 +211,7 @@ if (!SR) {
     let final = '';
     rec.onresult = e => {
       const r = e.results[e.results.length - 1];
-      if (r.isFinal) final = r[0].transcript; else interim(r[0].transcript);
+      if (r.isFinal) final = r[0].transcript; else line.textContent = r[0].transcript;
     };
     rec.onend = rec.onerror = () => {
       mic.classList.remove('live');
@@ -190,7 +219,7 @@ if (!SR) {
       mic.setAttribute('aria-label', 'Tap and speak');
       rec = null;
       voice(null);
-      if (final) send(final); else interim('');
+      if (final) send(final); else line.textContent = 'Tap the mic and ask me anything.';
     };
     mic.classList.add('live');
     mic.setAttribute('aria-pressed', 'true');
@@ -200,19 +229,31 @@ if (!SR) {
   };
 }
 
-/* ---------- clocks, timers, debug chips ---------- */
+/* ---------- top bar: clock, weather, debug chips ---------- */
 render(null);
-setInterval(() => tickClocks(), 1000);
+tickClocks(root);
+setInterval(() => tickClocks(root), 1000);
+
+async function loadWeather() {
+  try {
+    const w = await (await fetch('/api/weather')).json();
+    const el = q('[data-weather]');
+    el.hidden = !w;
+    el.innerHTML = weather(w);
+  } catch { /* the top bar simply shows no weather */ }
+}
+loadWeather();
+setInterval(loadWeather, WEATHER_MS);
 
 if (DEBUG) {
-  $('conn').hidden = false;
+  q('[data-conn]').hidden = false;
   fetch('/api/health').then(r => r.json()).then(h => {
     if (!h.mcp_ok) throw new Error('MCP server unreachable');
-    $('conn').classList.add('ok');
-    $('conn-text').textContent = `Connected · ${h.tools} tools`;
-    $('mode').hidden = false;
-    $('mode').textContent = h.mode === 'bedrock' ? 'Bedrock agent' : 'Mock agent';
-  }).catch(() => { $('conn').classList.add('down'); $('conn-text').textContent = 'Offline'; });
+    q('[data-conn]').classList.add('ok');
+    q('[data-conn-text]').textContent = `Connected · ${h.tools} tools`;
+    q('[data-mode]').hidden = false;
+    q('[data-mode]').textContent = h.mode === 'bedrock' ? 'Bedrock agent' : 'Mock agent';
+  }).catch(() => { q('[data-conn]').classList.add('down'); q('[data-conn-text]').textContent = 'Offline'; });
 }
 
 if ('speechSynthesis' in window) speechSynthesis.getVoices();

@@ -1,13 +1,25 @@
-/* Every card state with fake data in the shapes harness/card.py produces. Buttons only flash. */
-const {build, idle, tickClocks} = window.GuardianCards;
+/* Every screen state with fake data in the shapes harness/card.py and /api/home produce.
+   /demo shows them all; /demo?state=<id> shows one at full size for screenshots and video. */
+const {screen, home, build, weather, tickClocks} = window.GuardianCards;
 const now = Date.now();
 const tellRahul = {label: 'Tell Rahul', tool: 'alert_family', args: {}};
 const startRecovery = {label: 'Start recovery', tool: 'start_incident', args: {}};
 const rahul = status => ({kind: 'verify', verify: {id: 'demo', name: 'Rahul', pronoun: 'him', status, started_at: now - 14000}});
-const steps = (index, total, text) => ({kind: 'recovery', recovery: {incident_id: 'demo', index, total, text, done: false}});
+const HOME = {
+  checks_this_week: 12, mcp_ok: true, verify_ready: true,
+  family: [{name: 'Rahul', initial: 'R'}, {name: 'Mum', initial: 'M'}],
+  recent: [
+    {kind: 'link', level: 'red', title: "Don't open this link", label: 'nordbank-secure-login.com'},
+    {kind: 'message', level: 'amber', title: 'Be careful', label: 'A message'},
+    {kind: 'link', level: 'grey', title: 'No red flags found', label: 'cozysocks.example'},
+  ],
+};
+const WEATHER = {temp: 8, icon: 'partly', words: 'Partly cloudy'};
 
 const STATES = [
-  ['Idle', 'idle', null],
+  ['Home screen', 'home', null],
+  ['Voice bar: listening', 'listening', null, {voice: 'listening', line: 'Is this link safe? nordbank-secure…'}],
+  ['Conversation expanded', 'transcript', null, {sheet: true}],
   ['Link: loading', 'pending', {kind: 'link', pending: true, domain: 'nordbank-secure-login.com', reasons: []}],
   ["Link: Don't open this link", 'red', {
     kind: 'link', level: 'red', title: "Don't open this link", domain: 'nordbank-secure-login.com',
@@ -34,21 +46,68 @@ const STATES = [
   ['Caller: confirmed', 'verify-confirmed', rahul('confirmed')],
   ['Caller: denied', 'verify-denied', rahul('denied')],
   ['Caller: no reply', 'verify-no_reply', rahul('no_reply')],
-  ['Recovery: step 1 of 4', 'recovery-1', steps(1, 4, 'Call your bank using the number on the back of your card.')],
-  ['Recovery: step 3 of 4', 'recovery-3', steps(3, 4, 'Change the password of the account you were using.')],
+  ['Recovery: step 2 of 4', 'recovery', {kind: 'recovery', recovery: {incident_id: 'demo', index: 2, total: 4, done: false,
+    text: 'Ask your bank to block your card and any transfers.'}}],
   ['Recovery: done', 'recovery-done', {kind: 'recovery', recovery: {incident_id: 'demo', index: 4, total: 4, done: true, family_told: true}}],
+];
+const TRANSCRIPT = [
+  ['user', 'Is this link safe? https://nordbank-secure-login.com'],
+  ['bot', "Please don't open that link. The page says it's NordBank, but it isn't. Never share a code or PIN."],
+  ['user', 'Tell Rahul'],
+  ['bot', "I've told Rahul."],
 ];
 
 const flash = (_, b) => { b.animate([{transform: 'scale(.97)'}, {transform: 'none'}], {duration: 180}); };
-const handlers = {action: flash, next: flash, repeat: flash};
+const handlers = {action: flash, next: flash, repeat: flash, home: flash};
 
-const grid = document.getElementById('grid');
-for (const [label, id, card] of STATES) {
-  const fig = document.createElement('figure');
-  fig.className = 'state';
-  fig.id = id;
-  fig.innerHTML = `<figcaption>${label} <code>#${id}</code></figcaption><div class="frame cardpane"></div>`;
-  fig.querySelector('.frame').append(card ? build(card, handlers) : idle());
-  grid.append(fig);
+function device(card, opts = {}) {
+  const product = document.createElement('div');
+  product.className = 'product';
+  product.innerHTML = `<main class="device"><div class="cams" aria-hidden="true"><i></i><i></i><i></i></div></main><div class="base" aria-hidden="true"></div>`;
+  const s = screen();
+  s.classList.toggle('on-home', !card);
+  s.querySelector('[data-view]').append(card ? build(card, handlers) : home(HOME));
+  const w = s.querySelector('[data-weather]');
+  w.hidden = false;
+  w.innerHTML = weather(WEATHER);
+  if (opts.voice) {
+    s.querySelector('[data-voicebar]').classList.add(opts.voice);
+    s.querySelector('[data-line]').textContent = opts.line;
+  }
+  if (opts.sheet) {
+    s.classList.add('sheet-open');
+    s.querySelector('[data-sheet]').hidden = false;
+    s.querySelector('[data-transcript]').innerHTML = TRANSCRIPT.map(([who, t]) => `<div class="msg ${who}"><p class="bubble">${t}</p></div>`).join('');
+    s.querySelector('[data-line]').textContent = TRANSCRIPT.at(-1)[1];
+  }
+  product.querySelector('.device').append(s);
+  return product;
 }
+
+const root = document.getElementById('root');
+const only = new URLSearchParams(location.search).get('state');
+const solo = STATES.find(([, id]) => id === only);
+if (solo) {
+  document.body.classList.add('solo');
+  document.title = `Guardian · ${solo[0]}`;
+  const stage = document.createElement('div');
+  stage.className = 'stage';
+  stage.append(device(solo[2], solo[3]));
+  root.replaceWith(stage);
+} else {
+  const page = document.createElement('main');
+  page.className = 'demo';
+  page.innerHTML = `<header><h1>Guardian screen states</h1>
+    <p>Fake data, real renderer (static/cards.js). Open any state full size for screenshots.</p></header><div class="grid"></div>`;
+  for (const [label, id, card, opts] of STATES) {
+    const fig = document.createElement('figure');
+    fig.className = 'state';
+    fig.id = id;
+    fig.innerHTML = `<figcaption>${label} <a href="/demo?state=${id}">Full size</a></figcaption><div class="shrink"></div>`;
+    fig.querySelector('.shrink').append(device(card, opts));
+    page.querySelector('.grid').append(fig);
+  }
+  root.replaceWith(page);
+}
+tickClocks();
 setInterval(() => tickClocks(), 1000);
