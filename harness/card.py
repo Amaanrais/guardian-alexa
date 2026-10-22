@@ -83,6 +83,10 @@ def build_card(tool: str, data: dict, prev: dict | None = None) -> dict | None:
     title = src.get("title")
     if tool == "get_verification":
         title = {"red": "Hang up", "grey": "It really is them"}.get(level, "No answer yet")
+    if tool in ("start_incident", "next_step"):
+        title = "All steps done" if src.get("done") else "Your next step"
+        if src.get("done"):
+            level, src = "grey", {**src, "reasons": ["You finished every step. Well done."]}
     if not title or SAFE_RE.search(str(title)):
         title = TITLES[level]
 
@@ -111,5 +115,7 @@ def build_card(tool: str, data: dict, prev: dict | None = None) -> dict | None:
         action = {"label": _clean(action.get("label", "Tell Rahul")),
                   "tool": action.get("tool"), "args": action.get("args") or {}}
 
-    return {"level": level, "icon": ICONS[level], "title": _clean(title), "reasons": reasons,
+    kind = {"check_message": "message", "get_verification": "verify",
+            "start_incident": "recovery", "next_step": "recovery"}.get(tool, "link")
+    return {"level": level, "icon": ICONS[level], "kind": kind, "title": _clean(title), "reasons": reasons,
             "screenshot_url": shot, "action": action, "pending": tool == "check_link" or (tool == "get_link_report" and str(src.get("status")) not in ("done", "complete", "completed"))}
