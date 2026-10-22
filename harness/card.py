@@ -3,7 +3,7 @@
 Card kinds and what the front end (static/cards.js) expects:
   link / message  {level: red|amber|grey, title, reasons[<=3], injection, domain, screenshot_url, pending, action}
   verify          {verify: {id, name, pronoun, status: waiting|confirmed|denied|no_reply, started_at}}
-  recovery        {recovery: {incident_id, index, total, text, done, family_told}, action}
+  recovery        {recovery: {incident_id, index, total, text, done, family_told, question, choices}, action}
 Fields the contract doesn't define yet (final_domain, a step's number and total) are used
 when the server sends them and otherwise worked out here.
 """
@@ -30,11 +30,25 @@ INJECTION_RE = re.compile(
     r"(trick|fool|manipulate) (the |an )?(ai|assistant|chatbot)",
     re.I,
 )
-# The demo family circle. FAMILY is who "Tell ..." alerts; pronouns are only listed where
-# known, everyone else gets "them".
-FAMILY = "Rahul"
-FAMILY_CIRCLE = ["Rahul", "Mum"]
-PRONOUNS = {"Rahul": "him"}
+# The family circle as the harness shows it. The server keeps the real list (Telegram) and has no
+# tool to read it, so the names come from FAMILY_NAMES, e.g. "Amaan,Rahul:him". A pronoun is only
+# used when given after a colon; everyone else is "them".
+def _family(raw: str) -> tuple[list[str], dict[str, str]]:
+    names, pronouns = [], {}
+    for part in raw.split(","):
+        name, _, pronoun = part.strip().partition(":")
+        if name.strip():
+            names.append(name.strip())
+            if pronoun.strip():
+                pronouns[name.strip()] = pronoun.strip()
+    return names, pronouns
+
+
+FAMILY_CIRCLE, PRONOUNS = _family(os.getenv("FAMILY_NAMES", "Rahul:him"))
+FAMILY = FAMILY_CIRCLE[0] if FAMILY_CIRCLE else "your family"
+# The clarifying question's two answers, as buttons
+CHOICES = [{"label": "I shared a code", "tool": "start_incident", "args": {"description": "I shared a code"}},
+           {"label": "I clicked a link", "tool": "start_incident", "args": {"description": "I clicked a link and typed my password"}}]
 VERIFY_STATUSES = ("confirmed", "denied", "no_reply")
 
 
@@ -88,7 +102,15 @@ def _host(url) -> str | None:
 
 
 def tell_family(reason: str) -> dict:
-    return {"label": f"Tell {FAMILY}", "tool": "alert_family", "args": {"reason": reason}}
+    # alert_family reaches everyone in the circle, so only name one person when there is one
+    label = f"Tell {FAMILY_CIRCLE[0]}" if len(FAMILY_CIRCLE) == 1 else "Tell my family"
+    return {"label": label, "tool": "alert_family", "args": {"reason": reason}}
+
+
+def _action(raw) -> dict | None:
+    if isinstance(raw, dict) and raw.get("label") and raw.get("tool"):
+        return {"label": _clean(raw["label"]), "tool": str(raw["tool"]), "args": raw.get("args") or {}}
+    return None
 
 
 def start_recovery(description: str) -> dict:
@@ -171,18 +193,25 @@ def _recovery_card(tool: str, src: dict, prev: dict, args: dict) -> dict | None:
             "incident_id": incident, "done": True, "index": total, "total": total, "family_told": False}}
 
     step = src.get("step") or src.get("next_step") or src.get("text")
+    action = None
     index = src.get("step_number") or src.get("index")
     total = src.get("total_steps") or src.get("total")
     if isinstance(step, dict):
-        index = index or step.get("number") or step.get("index")
-        total = total or step.get("total")
+        if step.get("step_number") == 0:
+            # Not a step: the server is asking which playbook applies (docs/CONTRACT.md).
+            question = _clean(step.get("text") or "Did you share a code, or click a link?")
+            return {"kind": "recovery", "recovery": {"incident_id": None, "question": question, "choices": CHOICES}}
+        index = index or step.get("step_number") or step.get("number") or step.get("index")
+        total = total or step.get("total_steps") or step.get("total")
+        action = _action(step.get("action"))
         step = step.get("text") or step.get("title")
     if not step:
         return None
     index = int(index) if index else (1 if tool == "start_incident" else (before.get("index") or 0) + 1)
     total = int(total) if total else before.get("total")
-    return {"kind": "recovery", "recovery": {
-        "incident_id": incident, "index": index, "total": total, "text": _clean(step), "done": False}}
+    return {"kind": "recovery", "action": action, "recovery": {
+        "incident_id": incident, "index": index, "total": total, "text": _clean(step), "done": False,
+        "title": src.get("playbook_title") or before.get("title")}}
 
 
 def speech(card: dict | None) -> str:
@@ -199,6 +228,8 @@ def speech(card: dict | None) -> str:
         }.get(v["status"], "")
     if card.get("kind") == "recovery":
         r = card["recovery"]
+        if r.get("question"):
+            return r["question"]
         if r.get("done"):
             told = " Your family has been told." if r.get("family_told") else ""
             return "You've done everything on the list." + told

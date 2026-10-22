@@ -36,6 +36,7 @@
   <symbol id="i-fog" viewBox="0 0 24 24"><path d="M4 9h16M3 13h18M5 17h14"/></symbol>
   <symbol id="i-storm" viewBox="0 0 24 24"><path d="M7 15.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.6A4 4 0 0 1 17.5 15.5Z"/><path d="m12.5 14-2 3.5h3l-2 3.5"/></symbol>
   <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
 </defs></svg>`;
   document.body.insertAdjacentHTML('afterbegin', SPRITE);
 
@@ -68,7 +69,7 @@
       <div class="view" data-view></div>
       <div class="suggestions" data-suggestions aria-label="Things you can say">
         <button type="button" class="suggest" data-say="Is this a scam? http://secure-bank.example/login">${svg('i-link')}Check a link</button>
-        <button type="button" class="suggest" data-say="Is that really Rahul calling?">${svg('i-phone')}Is it really Rahul?</button>
+        <button type="button" class="suggest" data-say="Is that really Rahul calling?" data-verify-chip>${svg('i-phone')}<span>Is it really Rahul?</span></button>
         <button type="button" class="suggest" data-say="I gave someone my bank code">${svg('i-lifebuoy')}I shared a code</button>
       </div>
       <div class="voicebar" data-voicebar>
@@ -175,6 +176,14 @@
 
   function recovery(c) {
     const r = c.recovery;
+    if (r.question) {
+      // step_number 0: one clarifying question, answered by voice or with a button
+      const choices = (r.choices || []).map((a, i) =>
+        `<button type="button" class="btn ${i ? 'btn-secondary' : 'btn-primary'}" data-choice="${i}">${svg(i ? 'i-link' : 'i-lifebuoy')}<span>${esc(a.label)}</span></button>`).join('');
+      return {tone: 'calm', body: `${head('i-lifebuoy', EYEBROW.recovery, esc(r.question))}
+        <div class="card-body recovery-body"><p class="step-hint">${svg('i-mic')}Tap an answer, or just tell me what happened.</p>
+          <div class="card-actions two">${choices}</div></div>`};
+    }
     const dots = r.total ? `<ol class="dots" aria-hidden="true">${Array.from({length: r.total}, (_, i) =>
       `<li class="${i + 1 < r.index || r.done ? 'done' : i + 1 === r.index ? 'current' : ''}"></li>`).join('')}</ol>` : '';
     if (r.done) {
@@ -186,6 +195,7 @@
     return {tone: 'calm', body: `${head('i-lifebuoy', EYEBROW.recovery, esc(`Step ${r.index}${r.total ? ` of ${r.total}` : ''}`))}
       <div class="card-body recovery-body">${dots}<p class="step-text">${esc(r.text)}</p>
         <div class="card-actions two">
+          ${c.action ? `<div class="span-2">${button(c.action.label, c.action.tool === 'alert_family' ? 'i-users' : 'i-arrow', 'btn-secondary', 'action')}</div>` : ''}
           ${button('Done, next step', 'i-check', 'btn-primary', 'next')}
           ${button('Say it again', 'i-volume', 'btn-secondary', 'repeat')}
         </div></div>`};
@@ -202,13 +212,17 @@
       const fn = on[b.dataset.do];
       b.onclick = () => fn && fn(card, b);
     });
+    el.querySelectorAll('[data-choice]').forEach(b => {
+      const choice = card.recovery.choices[Number(b.dataset.choice)];
+      b.onclick = () => on.action && on.action({...card, action: choice}, b);
+    });
     return el;
   }
 
   /** A stable identity for a card's visible state, so re-renders of the same state don't re-animate. */
   function key(c) {
     if (!c) return 'home';
-    return JSON.stringify([c.kind, c.level, c.pending, c.title, c.verify?.status, c.recovery?.index, c.recovery?.done]);
+    return JSON.stringify([c.kind, c.level, c.pending, c.title, c.verify?.status, c.recovery?.index, c.recovery?.done, c.recovery?.question]);
   }
 
   function weather(w) {

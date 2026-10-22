@@ -71,6 +71,15 @@ async function homeData() {
   try { return await (await fetch('/api/home')).json(); } catch { return {mcp_ok: false}; }
 }
 
+function familyChip(d) {
+  // "Is it really <name>?" uses the first person in the family circle
+  const name = d.family?.[0]?.name;
+  const chip = q('[data-verify-chip]');
+  if (!name || !chip) return;
+  chip.dataset.say = `Is that really ${name} calling?`;
+  chip.querySelector('span').textContent = `Is it really ${name}?`;
+}
+
 function render(card) {
   const k = key(card);
   const changed = k !== currentKey;
@@ -80,7 +89,7 @@ function render(card) {
   if (!card) { unseen = 0; bell(); }
   const next = card ? build(card, handlers) : home(lastHome);
   swap(next, changed);
-  if (!card) homeData().then(d => { lastHome = d; if (!current) swap(home(d), false); });
+  if (!card) homeData().then(d => { lastHome = d; familyChip(d); if (!current) swap(home(d), false); });
   watchVerification(card);
 }
 let lastHome = {};
@@ -183,10 +192,16 @@ async function runAction(a, b) {
   if (!a) return;
   b.disabled = true;
   if (a.tool !== 'alert_family') { await act(a.tool, a.args); return; }
-  const res = await act(a.tool, a.args);
-  if (!res || res.error) { b.disabled = false; return; }
-  b.classList.add('is-done');
-  b.innerHTML = `${svg('i-check')}<span>${a.label.replace(/^Tell /, '')} has been told</span>`;
+  // The alert doesn't change the card, so mark this button instead of re-rendering it.
+  try {
+    const res = await post('/api/action', {tool: a.tool, args: a.args});
+    say(res.reply);
+    const told = res.trace?.[0]?.result;
+    if (!told?.sent) { b.disabled = false; return; }
+    const names = told.recipients;
+    b.classList.add('is-done');
+    b.innerHTML = `${svg('i-check')}<span>Told ${names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names.at(-1)}</span>`;
+  } catch (e) { say("Sorry, I couldn't do that just now."); b.disabled = false; if (DEBUG) addMsg(e.message, 'err'); }
 }
 
 /* ---------- inputs ---------- */

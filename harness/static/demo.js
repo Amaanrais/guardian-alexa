@@ -7,7 +7,7 @@ const startRecovery = {label: 'Start recovery', tool: 'start_incident', args: {}
 const rahul = status => ({kind: 'verify', verify: {id: 'demo', name: 'Rahul', pronoun: 'him', status, started_at: now - 14000}});
 const HOME = {
   checks_this_week: 12, mcp_ok: true, verify_ready: true,
-  family: [{name: 'Rahul', initial: 'R'}, {name: 'Mum', initial: 'M'}],
+  family: [{name: 'Rahul', initial: 'R'}, {name: 'Priya', initial: 'P'}],
   recent: [
     {kind: 'link', level: 'red', title: "Don't open this link", label: 'nordbank-secure-login.com'},
     {kind: 'message', level: 'amber', title: 'Be careful', label: 'A message'},
@@ -46,8 +46,15 @@ const STATES = [
   ['Caller: confirmed', 'verify-confirmed', rahul('confirmed')],
   ['Caller: denied', 'verify-denied', rahul('denied')],
   ['Caller: no reply', 'verify-no_reply', rahul('no_reply')],
+  ['Recovery: clarifying question', 'recovery-question', {kind: 'recovery', recovery: {incident_id: null,
+    question: 'Did you share a code, or click a link?',
+    choices: [{label: 'I shared a code', tool: 'start_incident', args: {}}, {label: 'I clicked a link', tool: 'start_incident', args: {}}]}}],
   ['Recovery: step 2 of 4', 'recovery', {kind: 'recovery', recovery: {incident_id: 'demo', index: 2, total: 4, done: false,
     text: 'Ask your bank to block your card and any transfers.'}}],
+  ['Recovery: step with an action', 'recovery-action', {kind: 'recovery',
+    action: {label: 'Ask Rahul for help', tool: 'alert_family', args: {}},
+    recovery: {incident_id: 'demo', index: 3, total: 3, done: false,
+      text: 'If you use the same password anywhere else, change it there too. Rahul can help you.'}}],
   ['Recovery: done', 'recovery-done', {kind: 'recovery', recovery: {incident_id: 'demo', index: 4, total: 4, done: true, family_told: true}}],
 ];
 const TRANSCRIPT = [
