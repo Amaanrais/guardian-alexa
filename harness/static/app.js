@@ -4,7 +4,7 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const URL_RE = /(https?:\/\/\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\/\S*)/i;
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
-const POLL_MS = 3000, VERIFY_GIVE_UP_MS = 120000, WEATHER_MS = 15 * 60000;
+const POLL_MS = 3000, VERIFY_GIVE_UP_MS = 120000, WEATHER_MS = 15 * 60000, HOME_MS = 30000;
 
 const root = screen();
 document.getElementById('screen-slot').replaceWith(root);
@@ -72,12 +72,22 @@ async function homeData() {
 }
 
 function familyChip(d) {
-  // "Is it really <name>?" uses the first person in the family circle
+  // "Is it really <name>?" uses the first person in the family circle; no one joined, no chip
   const name = d.family?.[0]?.name;
   const chip = q('[data-verify-chip]');
-  if (!name || !chip) return;
+  if (!chip) return;
+  chip.hidden = !name;
+  if (!name) return;
   chip.dataset.say = `Is that really ${name} calling?`;
   chip.querySelector('span').textContent = `Is it really ${name}?`;
+}
+
+// The family circle can change at any time (someone joins on Telegram): ask again every 30 s.
+async function refreshHome() {
+  const d = await homeData();
+  lastHome = d;
+  familyChip(d);
+  if (!current) swap(home(d), false);
 }
 
 function render(card) {
@@ -89,7 +99,7 @@ function render(card) {
   if (!card) { unseen = 0; bell(); }
   const next = card ? build(card, handlers) : home(lastHome);
   swap(next, changed);
-  if (!card) homeData().then(d => { lastHome = d; familyChip(d); if (!current) swap(home(d), false); });
+  if (!card) refreshHome();
   watchVerification(card);
 }
 let lastHome = {};
@@ -259,6 +269,7 @@ async function loadWeather() {
 }
 loadWeather();
 setInterval(loadWeather, WEATHER_MS);
+setInterval(refreshHome, HOME_MS);
 
 if (DEBUG) {
   q('[data-conn]').hidden = false;

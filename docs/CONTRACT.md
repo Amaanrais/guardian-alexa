@@ -16,6 +16,7 @@ It is never "Safe". Reasons are plain-language strings, most important first.
 | `start_incident(description)` | `{incident_id, playbook_title, step}` |
 | `next_step(incident_id)` | `{step}` or `{done: true, summary}` |
 | `alert_family(reason)` | `{sent: true, recipients: [names]}` |
+| `get_family_circle()` | `{members: [{name}]}` |
 
 **Errors** come back as an MCP tool error (`isError: true`) whose text is a plain-language
 sentence that can be spoken. The SDK may prefix it with `Error executing tool <name>: `.
@@ -91,6 +92,10 @@ name used in `verify_caller(name)`. The family circle lives on the server, in
 - `alert_family(reason)` messages everyone in the family circle and returns
   `{sent: true, recipients: [names]}`. Recipients always come from the server's config, never
   from the caller. If nobody could be reached it returns `{sent: false, recipients: []}`.
+
+- `get_family_circle()` returns `{members: [{name}]}`, the first names `verify_caller` accepts,
+  in the order people joined. Read-only. Names only: Telegram chat ids never leave the server.
+  An empty list means nobody has joined yet.
 
 **Fake mode** (`TELEGRAM_FAKE=1`): no network. `verify_caller` answers `denied` by itself after
 3 seconds, and `alert_family` only logs. If the family circle is empty in fake mode, it contains

@@ -101,7 +101,9 @@
          <p class="home-sub">${n === 1 ? '1 check' : `${n} checks`} this week</p>`
       : `<span class="home-mark warn">${svg('i-shield-alert')}</span><h2 class="home-title">Checks are offline</h2>
          <p class="home-sub">If someone asks for money, hang up and call family.</p>`;
-    const family = (d.family || []).map(p => `<li><span class="avatar-initial" aria-hidden="true">${esc(p.initial)}</span><span>${esc(p.name)}</span></li>`).join('');
+    const family = (d.family || []).length
+      ? `<ul class="family">${d.family.map(p => `<li><span class="avatar-initial" aria-hidden="true">${esc(p.initial)}</span><span>${esc(p.name)}</span></li>`).join('')}</ul>`
+      : '<p class="home-empty">No one has joined yet. Family members join by messaging the Guardian bot.</p>';
     const ready = d.verify_ready
       ? `${svg('i-phone')}Ready to verify calls` : `${svg('i-info')}Call checks aren't set up yet`;
     const recent = (d.recent || []).length
@@ -111,7 +113,7 @@
     return html(`<div class="home">
       <div class="home-cards">
         <article class="glass home-card home-guardian"><p class="home-label">Guardian</p>${guardian}</article>
-        <article class="glass home-card"><p class="home-label">Family circle</p><ul class="family">${family}</ul>
+        <article class="glass home-card"><p class="home-label">Family circle</p>${family}
           <p class="home-foot ${d.verify_ready ? '' : 'muted'}">${ready}</p></article>
         <article class="glass home-card"><p class="home-label">Recent checks</p>${recent}</article>
       </div>

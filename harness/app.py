@@ -10,9 +10,9 @@ from pydantic import BaseModel
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 import agent  # noqa: E402  (after load_dotenv so env is set)
+import circle  # noqa: E402
 import history  # noqa: E402
 import weather  # noqa: E402
-from card import FAMILY_CIRCLE  # noqa: E402
 from mcp_client import connect  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
@@ -63,10 +63,25 @@ async def health():
 
 @app.get("/api/home")
 async def home():
-    """Data for the home screen cards. "Ready to verify calls" is only claimed when the server can."""
-    tools = await _tool_names()
+    """Data for the home screen cards; the page asks again every 30 seconds.
+
+    The family comes from the server's get_family_circle (FAMILY_NAMES only if it can't be asked),
+    and "Ready to verify calls" is only claimed when the server has verify_caller.
+    """
+    tools = None
+    try:
+        async with asyncio.timeout(4):
+            async with connect(_mcp_url()) as client:
+                tools = [t.name for t in (await client.list_tools()).tools]
+                if "get_family_circle" in tools:
+                    await circle.refresh(client, force=True)
+                else:
+                    circle.unreachable()
+    except Exception:
+        circle.unreachable()
     return {**history.summary(),
-            "family": [{"name": n, "initial": n[0]} for n in FAMILY_CIRCLE],
+            "family": [{"name": n, "initial": n[0].upper()} for n in circle.names()],
+            "family_source": circle.source(),
             "mcp_ok": tools is not None,
             "verify_ready": bool(tools and "verify_caller" in tools)}
 

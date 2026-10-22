@@ -4,7 +4,8 @@ import os
 import re
 
 import history
-from card import FAMILY_CIRCLE, build_card, speech, start_recovery
+import circle
+from card import build_card, speech, start_recovery
 from mcp_client import connect, parse_result, tool_specs
 
 SYSTEM = (
@@ -123,7 +124,7 @@ async def _mock(text: str, client, st: dict, trace: list) -> str:
         return st["last_step"] or "That's everything for now."
     if re.search(r"gave|shared|told|clicked|hacked|otp|code|pin", low):
         return await _start_recovery(text, client, st, trace)
-    if re.search(r"\btell (my|the|" + "|".join(re.escape(n.lower()) for n in FAMILY_CIRCLE) + r")\b|alert|family", low):
+    if re.search(r"\btell (my|the|" + "|".join([re.escape(n.lower()) for n in circle.names()] + ["family"]) + r")\b|alert|family", low):
         data = await _call(client, "alert_family", {"reason": text}, st, trace)
         return data.get("error") or _told(data)
     if re.search(r"scam|text|message|says", low):
@@ -175,6 +176,7 @@ async def respond(sid: str, text: str) -> dict:
     st, trace = session(sid), []
     try:
         async with connect(_url()) as client:
+            await circle.refresh(client)
             run = _bedrock if os.getenv("USE_BEDROCK") == "1" else _mock
             reply = await run(text, client, st, trace)
     except Exception as e:  # server down, no AWS credentials, etc.
@@ -187,6 +189,7 @@ async def act(sid: str, tool: str, args: dict) -> dict:
     st, trace = session(sid), []
     try:
         async with connect(_url()) as client:
+            await circle.refresh(client)
             await _call(client, tool, args, st, trace)
     except Exception as e:
         return {"reply": "I couldn't do that just now.", "card": st["card"], "trace": trace,

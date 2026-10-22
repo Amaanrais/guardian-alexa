@@ -126,6 +126,14 @@ class VerificationStatus(BaseModel):
     status: Literal["waiting", "confirmed", "denied", "no_reply"]
 
 
+class FamilyMember(BaseModel):
+    name: str
+
+
+class FamilyCircle(BaseModel):
+    members: list[FamilyMember]
+
+
 class FamilyAlert(BaseModel):
     sent: bool
     recipients: list[str]
@@ -173,6 +181,12 @@ async def get_verification(id: str) -> VerificationStatus:  # noqa: A002 - name 
     """Whether the family member answered: waiting, confirmed, denied, or no_reply after 120 seconds."""
     with _spoken_errors():
         return VerificationStatus.model_validate(await family.get_verification(id))
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_family_circle() -> FamilyCircle:
+    """Who is in the family circle, by first name. These are the names verify_caller accepts."""
+    return FamilyCircle.model_validate(family.circle())
 
 
 @mcp.tool(annotations=_SENDS)

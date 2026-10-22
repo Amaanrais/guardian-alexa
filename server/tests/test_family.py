@@ -205,3 +205,20 @@ def test_redact_filter_blanks_the_token(monkeypatch):
     record = logging.LogRecord("x", logging.INFO, __file__, 1, "url was %s", (f"https://api.telegram.org/bot{TOKEN}/x",), None)
     family.RedactToken().filter(record)
     assert TOKEN not in record.getMessage()
+
+
+# ---------- get_family_circle ----------
+
+def test_circle_is_names_only_in_join_order():
+    join("Amaan", 42)
+    join("Priya", 43)
+    assert family.circle() == {"members": [{"name": "Amaan"}, {"name": "Priya"}]}
+
+
+def test_circle_in_fake_mode_has_the_demo_member():
+    assert family.circle() == {"members": [{"name": "Rahul"}]}
+
+
+def test_circle_is_empty_until_someone_joins(monkeypatch):
+    monkeypatch.setattr(config, "TELEGRAM_FAKE", False)
+    assert family.circle() == {"members": []}

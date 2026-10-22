@@ -12,6 +12,8 @@ import re
 import time
 from urllib.parse import urlsplit
 
+import circle
+
 TITLES = {
     "red": "Don't open this link",
     "amber": "Be careful",
@@ -30,22 +32,6 @@ INJECTION_RE = re.compile(
     r"(trick|fool|manipulate) (the |an )?(ai|assistant|chatbot)",
     re.I,
 )
-# The family circle as the harness shows it. The server keeps the real list (Telegram) and has no
-# tool to read it, so the names come from FAMILY_NAMES, e.g. "Amaan,Rahul:him". A pronoun is only
-# used when given after a colon; everyone else is "them".
-def _family(raw: str) -> tuple[list[str], dict[str, str]]:
-    names, pronouns = [], {}
-    for part in raw.split(","):
-        name, _, pronoun = part.strip().partition(":")
-        if name.strip():
-            names.append(name.strip())
-            if pronoun.strip():
-                pronouns[name.strip()] = pronoun.strip()
-    return names, pronouns
-
-
-FAMILY_CIRCLE, PRONOUNS = _family(os.getenv("FAMILY_NAMES", "Rahul:him"))
-FAMILY = FAMILY_CIRCLE[0] if FAMILY_CIRCLE else "your family"
 # The clarifying question's two answers, as buttons
 CHOICES = [{"label": "I shared a code", "tool": "start_incident", "args": {"description": "I shared a code"}},
            {"label": "I clicked a link", "tool": "start_incident", "args": {"description": "I clicked a link and typed my password"}}]
@@ -103,7 +89,8 @@ def _host(url) -> str | None:
 
 def tell_family(reason: str) -> dict:
     # alert_family reaches everyone in the circle, so only name one person when there is one
-    label = f"Tell {FAMILY_CIRCLE[0]}" if len(FAMILY_CIRCLE) == 1 else "Tell my family"
+    names = circle.names()
+    label = f"Tell {names[0]}" if len(names) == 1 else "Tell my family"
     return {"label": label, "tool": "alert_family", "args": {"reason": reason}}
 
 
@@ -166,16 +153,16 @@ def _verify_card(tool: str, src: dict, prev: dict, args: dict) -> dict | None:
     if tool == "verify_caller":
         if not src.get("verification_id"):
             return None
-        name = str(args.get("name") or FAMILY)
+        name = str(args.get("name") or (circle.names() or ["your family member"])[0])
         before = {"id": src["verification_id"], "name": name, "started_at": int(time.time() * 1000)}
     status = str(src.get("status") or "waiting")
-    name = before.get("name") or FAMILY
+    name = before.get("name") or (circle.names() or ["your family member"])[0]
     return {
         "kind": "verify",
         "verify": {
             "id": before.get("id") or args.get("id"),
             "name": name,
-            "pronoun": PRONOUNS.get(name, "them"),
+            "pronoun": circle.pronoun(name),
             "status": status if status in VERIFY_STATUSES else "waiting",
             "started_at": before.get("started_at") or int(time.time() * 1000),
         },

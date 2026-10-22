@@ -7,7 +7,7 @@ from server import app as app_module
 from server import config
 
 ALL_TOOLS = {"check_link", "get_link_report", "check_message", "verify_caller", "get_verification",
-             "start_incident", "next_step", "alert_family"}
+             "start_incident", "next_step", "alert_family", "get_family_circle"}
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 
 
@@ -134,3 +134,15 @@ def test_spoken_errors_are_tool_errors(client):
     assert "I don't have Zed in your family circle yet." in res["content"][0]["text"]
     res = call(client, "next_step", {"incident_id": "nope"})
     assert res["isError"] is True and "can't find that recovery" in res["content"][0]["text"]
+
+
+def test_family_circle_over_http_has_names_only(client):
+    from server import family
+
+    family.add_member("Amaan", 987654321)
+    family.add_member("Priya", 123456789)
+    resp = rpc(client, "tools/call", {"name": "get_family_circle", "arguments": {}})
+    assert resp.json()["result"]["structuredContent"] == {"members": [{"name": "Amaan"}, {"name": "Priya"}]}
+    assert "987654321" not in resp.text and "chat_id" not in resp.text
+    tool = next(t for t in rpc(client, "tools/list").json()["result"]["tools"] if t["name"] == "get_family_circle")
+    assert tool["annotations"]["readOnlyHint"] is True

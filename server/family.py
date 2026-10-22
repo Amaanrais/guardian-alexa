@@ -101,6 +101,11 @@ def members() -> list[dict]:
     return found
 
 
+def circle() -> dict:
+    """The family circle for display: first names only. Chat ids never leave the server."""
+    return {"members": [{"name": m["name"]} for m in members()]}
+
+
 def find(name: str) -> dict | None:
     key = name.strip().casefold()
     return next((m for m in members() if m["name"].casefold() == key), None)
