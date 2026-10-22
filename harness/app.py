@@ -39,7 +39,7 @@ async def action(body: Action):
 
 @app.get("/api/health")
 async def health():
-    url = os.getenv("MCP_URL", "http://localhost:8000/mcp")
+    url = os.getenv("MCP_URL", "http://localhost:8765/mcp")
     try:
         async with asyncio.timeout(3):
             async with connect(url) as client:
@@ -53,6 +53,12 @@ async def health():
 @app.get("/")
 async def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/demo")
+async def demo():
+    """Every card state with fake data, for screenshots and the video."""
+    return FileResponse(STATIC / "demo.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

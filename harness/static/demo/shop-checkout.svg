@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1280" height="800" fill="#fbf8f3"/>
+  <rect width="1280" height="88" fill="#fff" stroke="#ece5da"/>
+  <text x="70" y="56" font-size="30" font-weight="700" fill="#5a3e2b">Cozy Socks Co.</text>
+  <text x="900" y="54" font-size="20" fill="#7a6656">Shop   Gifts   Basket (2)</text>
+  <text x="70" y="170" font-size="40" font-weight="700" fill="#2c2119">Checkout</text>
+  <rect x="70" y="210" width="640" height="460" rx="16" fill="#fff" stroke="#ece5da"/>
+  <text x="110" y="270" font-size="20" fill="#5c4a3d">Card number</text>
+  <rect x="110" y="284" width="560" height="54" rx="10" fill="#fbf8f3" stroke="#dccfbf"/>
+  <text x="110" y="380" font-size="20" fill="#5c4a3d">Expiry            CVC</text>
+  <rect x="110" y="394" width="260" height="54" rx="10" fill="#fbf8f3" stroke="#dccfbf"/>
+  <rect x="410" y="394" width="260" height="54" rx="10" fill="#fbf8f3" stroke="#dccfbf"/>
+  <rect x="110" y="500" width="560" height="60" rx="10" fill="#2f7d4f"/>
+  <text x="390" y="538" font-size="22" font-weight="700" fill="#fff" text-anchor="middle">Pay £18.00</text>
+  <rect x="770" y="210" width="440" height="300" rx="16" fill="#fff" stroke="#ece5da"/>
+  <text x="810" y="266" font-size="24" font-weight="700" fill="#2c2119">Your basket</text>
+  <text x="810" y="320" font-size="20" fill="#5c4a3d">Wool socks, 2 pairs     £18.00</text>
+</svg>

@@ -1,30 +1,43 @@
-"""Turn a Guardian tool result into the card the harness renders.
+"""Turn a Guardian tool result (docs/CONTRACT.md shapes) into the card the harness renders.
 
-CONTRACT.md was not available when this was written, so the parser accepts either a
-ready-made `card` object or the flat fields named in the build brief (verdict, reasons,
-screenshot_url) and degrades gracefully when fields are missing.
+Card kinds and what the front end (static/cards.js) expects:
+  link / message  {level: red|amber|grey, title, reasons[<=3], injection, domain, screenshot_url, pending, action}
+  verify          {verify: {id, name, pronoun, status: waiting|confirmed|denied|no_reply, started_at}}
+  recovery        {recovery: {incident_id, index, total, text, done, family_told}, action}
+Fields the contract doesn't define yet (final_domain, a step's number and total) are used
+when the server sends them and otherwise worked out here.
 """
 import os
 import re
+import time
+from urllib.parse import urlsplit
 
 TITLES = {
     "red": "Don't open this link",
     "amber": "Be careful",
     "grey": "No red flags found",
 }
-ICONS = {"red": "⛔", "amber": "⚠️", "grey": "ℹ️"}
 LEVEL_WORDS = {
-    "red": ("high", "red", "danger", "dangerous", "block", "denied", "scam"),
+    "red": ("high", "red", "danger", "dangerous", "block", "scam"),
     "amber": ("medium", "amber", "yellow", "caution", "warn", "warning", "suspicious"),
     "grey": ("none", "low", "grey", "gray", "no red flags", "no_red_flags", "unknown"),
 }
 SAFE_RE = re.compile(r"\bsafe(ly|ty)?\b", re.I)
-CARD_TOOLS = {"check_link", "get_link_report", "check_message", "get_verification",
-              "start_incident", "next_step", "alert_family", "verify_caller"}
+# A reason saying the page carried instructions meant for the AI rather than the person.
+INJECTION_RE = re.compile(
+    r"hidden (text|instructions?|prompts?|commands?)|prompt injection|"
+    r"instructions? (aimed at|meant for|for|to) (the |an )?(ai|assistant|chatbot|guardian)|"
+    r"(trick|fool|manipulate) (the |an )?(ai|assistant|chatbot)",
+    re.I,
+)
+# The demo family contact, with the pronoun they use. Unknown names get "them".
+FAMILY = "Rahul"
+PRONOUNS = {"Rahul": "him"}
+VERIFY_STATUSES = ("confirmed", "denied", "no_reply")
 
 
 def _level(value) -> str | None:
-    v = str(value or "").strip().lower().replace("\u2019", "'")
+    v = str(value or "").strip().lower().replace("’", "'")
     if v == "don't open this link":
         return "red"
     if v == "be careful":
@@ -59,63 +72,133 @@ def _reasons(raw) -> list[str]:
             r = r.get("text") or r.get("reason") or r.get("message") or ""
         if r:
             out.append(_clean(r))
-    return out[:3]
+    return out
 
 
-def build_card(tool: str, data: dict, prev: dict | None = None) -> dict | None:
+def _host(url) -> str | None:
+    if not url:
+        return None
+    url = str(url)
+    try:
+        return urlsplit(url if re.match(r"https?://", url, re.I) else "http://" + url).hostname
+    except ValueError:
+        return None
+
+
+def tell_family(reason: str) -> dict:
+    return {"label": f"Tell {FAMILY}", "tool": "alert_family", "args": {"reason": reason}}
+
+
+def start_recovery(description: str) -> dict:
+    return {"label": "Start recovery", "tool": "start_incident", "args": {"description": description}}
+
+
+def build_card(tool: str, data: dict, prev: dict | None = None, args: dict | None = None) -> dict | None:
     """Return a card dict, or None if this result should not change the card."""
-    if not isinstance(data, dict) or tool not in CARD_TOOLS:
+    if not isinstance(data, dict) or "error" in data:
         return None
-    base = data.get("card") if isinstance(data.get("card"), dict) else {}
-    src = {**data, **base}
-
-    level = (_level(src.get("level")) or _level(src.get("color")) or _level(src.get("verdict"))
-             or _level(src.get("quick_verdict")))
-    if tool == "get_verification":
-        level = {"denied": "red", "confirmed": "grey"}.get(str(src.get("status")), "amber")
-    if tool == "alert_family":
-        return None
+    src = {**data, **data["card"]} if isinstance(data.get("card"), dict) else data
+    prev, args = prev or {}, args or {}
+    if tool in ("check_link", "get_link_report", "check_message"):
+        return _verdict_card(tool, src, prev, args)
+    if tool in ("verify_caller", "get_verification"):
+        return _verify_card(tool, src, prev, args)
     if tool in ("start_incident", "next_step"):
-        level = level or "amber"
+        return _recovery_card(tool, src, prev, args)
+    return None
+
+
+def _verdict_card(tool: str, src: dict, prev: dict, args: dict) -> dict | None:
+    level = _level(src.get("verdict")) or _level(src.get("quick_verdict")) or _level(src.get("level"))
     if level is None:
-        return prev if tool == "check_link" and prev else None
-
-    title = src.get("title")
-    if tool == "get_verification":
-        title = {"red": "Hang up", "grey": "It really is them"}.get(level, "No answer yet")
-    if tool in ("start_incident", "next_step"):
-        title = "All steps done" if src.get("done") else "Your next step"
-        if src.get("done"):
-            level, src = "grey", {**src, "reasons": ["You finished every step. Well done."]}
-    if not title or SAFE_RE.search(str(title)):
-        title = TITLES[level]
-
+        return None
+    kind = "message" if tool == "check_message" else "link"
+    same_link = prev.get("kind") == "link" and tool == "get_link_report"
     reasons = _reasons(src.get("reasons"))
-    if tool in ("start_incident", "next_step") and not reasons:
-        step = src.get("step") or src.get("next_step") or src.get("text")
-        if isinstance(step, dict):
-            step = step.get("text") or step.get("title")
-        reasons = _reasons([step]) if step else []
-
-    # a quick verdict has no screenshot yet; keep the one from the earlier report if any
+    domain = (src.get("final_domain") or _host(src.get("final_url"))
+              or (_host(args.get("url")) if tool == "check_link" else None)
+              or (prev.get("domain") if same_link else None))
     shot = _shot_url(src.get("screenshot_path") or src.get("screenshot_url"))
-    if not shot and tool in ("check_link", "get_link_report"):
-        shot = (prev or {}).get("screenshot_url")
+    status = str(src.get("status") or "")
+    title = TITLES[level]
+    # The purple banner states the AI-trick reason, so the list keeps the other ones.
+    injection = [r for r in reasons if INJECTION_RE.search(r)]
+    shown = [r for r in reasons if r not in injection]
+    return {
+        "kind": kind,
+        "level": level,
+        "title": title,
+        "reasons": shown[:3],
+        "injection": bool(injection),
+        "domain": domain if kind == "link" else None,
+        "screenshot_url": shot or (prev.get("screenshot_url") if same_link else None),
+        "pending": tool == "check_link" or (tool == "get_link_report" and status in ("pending", "running")),
+        "action": tell_family(f"{title}: {reasons[0]}" if reasons else title) if level != "grey" else None,
+    }
 
-    if tool == "get_verification" and level == "red" and not reasons:
-        reasons = ["The real person says it isn't them."]
-    action = src.get("action") if isinstance(src.get("action"), dict) else None
-    if action is None:
-        if tool in ("start_incident", "next_step", "get_verification"):
-            action = None
-        elif level in ("red", "amber"):
-            action = {"label": "Tell Rahul", "tool": "alert_family",
-                      "args": {"reason": reasons[0] if reasons else title}}
-    if action:
-        action = {"label": _clean(action.get("label", "Tell Rahul")),
-                  "tool": action.get("tool"), "args": action.get("args") or {}}
 
-    kind = {"check_message": "message", "get_verification": "verify",
-            "start_incident": "recovery", "next_step": "recovery"}.get(tool, "link")
-    return {"level": level, "icon": ICONS[level], "kind": kind, "title": _clean(title), "reasons": reasons,
-            "screenshot_url": shot, "action": action, "pending": tool == "check_link" or (tool == "get_link_report" and str(src.get("status")) not in ("done", "complete", "completed"))}
+def _verify_card(tool: str, src: dict, prev: dict, args: dict) -> dict | None:
+    before = prev.get("verify") if prev.get("kind") == "verify" else {}
+    if tool == "verify_caller":
+        if not src.get("verification_id"):
+            return None
+        name = str(args.get("name") or FAMILY)
+        before = {"id": src["verification_id"], "name": name, "started_at": int(time.time() * 1000)}
+    status = str(src.get("status") or "waiting")
+    name = before.get("name") or FAMILY
+    return {
+        "kind": "verify",
+        "verify": {
+            "id": before.get("id") or args.get("id"),
+            "name": name,
+            "pronoun": PRONOUNS.get(name, "them"),
+            "status": status if status in VERIFY_STATUSES else "waiting",
+            "started_at": before.get("started_at") or int(time.time() * 1000),
+        },
+    }
+
+
+def _recovery_card(tool: str, src: dict, prev: dict, args: dict) -> dict | None:
+    before = prev.get("recovery") if prev.get("kind") == "recovery" else {}
+    if tool == "start_incident":
+        before = {}
+    incident = src.get("incident_id") or before.get("incident_id") or args.get("incident_id")
+    if src.get("done"):
+        total = before.get("total") or before.get("index")
+        return {"kind": "recovery", "recovery": {
+            "incident_id": incident, "done": True, "index": total, "total": total, "family_told": False}}
+
+    step = src.get("step") or src.get("next_step") or src.get("text")
+    index = src.get("step_number") or src.get("index")
+    total = src.get("total_steps") or src.get("total")
+    if isinstance(step, dict):
+        index = index or step.get("number") or step.get("index")
+        total = total or step.get("total")
+        step = step.get("text") or step.get("title")
+    if not step:
+        return None
+    index = int(index) if index else (1 if tool == "start_incident" else (before.get("index") or 0) + 1)
+    total = int(total) if total else before.get("total")
+    return {"kind": "recovery", "recovery": {
+        "incident_id": incident, "index": index, "total": total, "text": _clean(step), "done": False}}
+
+
+def speech(card: dict | None) -> str:
+    """What Guardian says when a card arrives without a reply of its own (button presses, polling)."""
+    if not card:
+        return ""
+    if card.get("kind") == "verify":
+        v = card["verify"]
+        name, obj = v["name"], v["pronoun"]
+        return {
+            "confirmed": f"{name} confirmed it's {obj}. Even so, never share a code or PIN.",
+            "denied": f"{name} says it isn't {obj}. Hang up now.",
+            "no_reply": f"{name} didn't answer. Don't send money. Call {obj} back on the number you usually use.",
+        }.get(v["status"], "")
+    if card.get("kind") == "recovery":
+        r = card["recovery"]
+        if r.get("done"):
+            told = " Your family has been told." if r.get("family_told") else ""
+            return "You've done everything on the list." + told
+        return r.get("text") or ""
+    return ""

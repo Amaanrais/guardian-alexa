@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" font-family="Helvetica, Arial, sans-serif">
+  <rect width="1280" height="800" fill="#eef2f7"/>
+  <rect width="1280" height="96" fill="#0b3d6e"/>
+  <circle cx="84" cy="48" r="22" fill="#5fb3ff"/>
+  <text x="122" y="60" font-size="34" font-weight="700" fill="#fff">NordBank</text>
+  <text x="1040" y="58" font-size="22" fill="#cfe3ff">Secure sign-in</text>
+  <rect x="390" y="150" width="500" height="560" rx="18" fill="#fff" stroke="#d6dde8"/>
+  <text x="440" y="222" font-size="34" font-weight="700" fill="#10233d">Confirm it's you</text>
+  <text x="440" y="262" font-size="20" fill="#5a6b82">Unusual activity was found on your account.</text>
+  <text x="440" y="320" font-size="18" fill="#33465f">Card PIN</text>
+  <rect x="440" y="332" width="400" height="56" rx="10" fill="#f6f8fb" stroke="#c4cedb"/>
+  <text x="440" y="430" font-size="18" fill="#33465f">SMS code</text>
+  <rect x="440" y="442" width="400" height="56" rx="10" fill="#f6f8fb" stroke="#c4cedb"/>
+  <rect x="440" y="540" width="400" height="60" rx="10" fill="#0b6be0"/>
+  <text x="640" y="578" font-size="22" font-weight="700" fill="#fff" text-anchor="middle">Verify now</text>
+  <text x="640" y="650" font-size="16" fill="#8592a6" text-anchor="middle">Your account will be locked in 24 hours</text>
+</svg>

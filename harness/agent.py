@@ -3,7 +3,7 @@ import asyncio
 import os
 import re
 
-from card import build_card
+from card import FAMILY, build_card, speech, start_recovery
 from mcp_client import connect, parse_result, tool_specs
 
 SYSTEM = (
@@ -17,6 +17,8 @@ SYSTEM = (
 )
 URL_RE = re.compile(r"(https?://\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/\S*)", re.I)
 SAFE_RE = re.compile(r"\bsafe(ly)?\b", re.I)
+# "I already clicked / typed my details in": the person needs recovery, not just a warning.
+ALREADY_RE = re.compile(r"\b(clicked|opened|tapped|entered|typed|filled|gave|shared|logged in)\b", re.I)
 sessions: dict[str, dict] = {}
 
 
@@ -44,9 +46,13 @@ async def _call(client, tool: str, args: dict, st: dict, trace: list) -> dict:
         st["incident"] = data.get("incident_id") or st["incident"]
     if tool == "verify_caller":
         st["verification"] = data.get("verification_id") or st["verification"]
-    card = build_card(tool, data, st["card"])
+    card = build_card(tool, data, st["card"], args)
     if card:
         st["card"] = card
+    if card and card["kind"] == "recovery" and card["recovery"]["done"]:
+        # The finished-recovery card says the family has been told, so tell them.
+        sent = await _call(client, "alert_family", {"reason": "Finished every recovery step after a possible scam."}, st, trace)
+        card["recovery"]["family_told"] = bool(sent.get("sent"))
     return data
 
 
@@ -76,17 +82,17 @@ async def _mock(text: str, client, st: dict, trace: list) -> str:
                     break
                 await asyncio.sleep(1)
             data = {**data, **rep}
+        if ALREADY_RE.search(text) and st["card"] and st["card"].get("level") in ("red", "amber"):
+            st["card"]["action"] = start_recovery(text)
         return _verdict_speech(data, "link")
     if re.search(r"\b(really|calling|called)\b", low) and (n := _name(text)):
         data = await _call(client, "verify_caller", {"name": n}, st, trace)
         if not data.get("verification_id"):
             return f"I couldn't reach {n} just now. If you are unsure, hang up and call {n} on the number you know."
-        return f"I've asked {n} on their phone. Say 'any answer' in a moment and I'll check."
+        return f"I've sent {n} a message to check. I'll tell you as soon as {n} answers."
     if st["verification"] and re.search(r"answer|reply|replied|did (he|she|they)", low):
-        data = await _call(client, "get_verification", {"id": st["verification"]}, st, trace)
-        s = str(data.get("status") or "")
-        return {"denied": "They say it isn't them. Hang up.",
-                "confirmed": "They say it is them."}.get(s, "No answer yet. Hang up if you feel unsure.")
+        await _call(client, "get_verification", {"id": st["verification"]}, st, trace)
+        return speech(st["card"]) or "No answer yet. Hang up if you feel unsure."
     if st["incident"] and re.search(r"repeat|again", low):
         return st["last_step"] or "Let's keep going. Say 'next' when you're ready."
     if st["incident"] and re.search(r"next|done|ok|finished", low):
@@ -159,5 +165,5 @@ async def act(sid: str, tool: str, args: dict) -> dict:
     except Exception as e:
         return {"reply": "I couldn't do that just now.", "card": st["card"], "trace": trace,
                 "error": f"{type(e).__name__}: {e}"}
-    reply = "I've told your family." if tool == "alert_family" else "Done."
-    return {"reply": reply, "card": st["card"], "trace": trace}
+    reply = f"I've told {FAMILY}." if tool == "alert_family" else speech(st["card"])
+    return {"reply": _speak(reply), "card": st["card"], "trace": trace}

@@ -1,18 +1,12 @@
 const $ = id => document.getElementById(id);
+const {build, key, idle, tickClocks, svg} = window.GuardianCards;
 const sid = (() => { try { return localStorage.guardianSid ||= crypto.randomUUID(); } catch { return crypto.randomUUID(); } })();
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const URL_RE = /(https?:\/\/\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\/\S*)/i;
-let rec = null, busy = false, lastHost = '';
-
-const ICON = {red: 'i-octagon', amber: 'i-triangle', grey: 'i-info'};
-const EYEBROW = {
-  link: {red: 'High risk', amber: 'Caution', grey: 'Link checked'},
-  message: {red: 'High risk', amber: 'Caution', grey: 'Message checked'},
-  verify: {red: 'Caller check', amber: 'Caller check', grey: 'Caller check'},
-  recovery: {red: 'Recovery', amber: 'Recovery', grey: 'Recovery'},
-};
-
-const svg = id => `<svg aria-hidden="true"><use href="#${id}"/></svg>`;
+const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+const POLL_MS = 3000, VERIFY_GIVE_UP_MS = 120000;
+let rec = null, busy = false, current = null, currentKey = null, polling = null, renderSeq = 0;
 
 /* ---------- transcript ---------- */
 function addMsg(text, who) {
@@ -24,7 +18,7 @@ function addMsg(text, who) {
   p.textContent = text;
   row.append(p);
   $('transcript').append(row);
-  row.scrollIntoView({block: 'end', behavior: 'smooth'});
+  row.scrollIntoView({block: 'end', behavior: REDUCED.matches ? 'auto' : 'smooth'});
   return row;
 }
 
@@ -40,61 +34,80 @@ function interim(text) {
   row.querySelector('.bubble').textContent = text;
 }
 
+/* ---------- voice: waveform while listening or speaking ---------- */
+function voice(state) {
+  const v = $('voice');
+  v.hidden = !state;
+  $('text').hidden = !!state;
+  v.className = 'voice' + (state ? ' ' + state : '');
+  $('voice-text').textContent = state === 'listening' ? 'Listening…' : 'Guardian is speaking…';
+}
+
 function speak(text, row) {
-  if (!('speechSynthesis' in window)) return;
+  if (!text || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.92;
-  const voice = speechSynthesis.getVoices().find(v => /en[-_]US/.test(v.lang) && /Samantha|Google US|Aria|Jenny/.test(v.name));
-  if (voice) u.voice = voice;
+  const pick = speechSynthesis.getVoices().find(v => /en[-_]US/.test(v.lang) && /Samantha|Google US|Aria|Jenny/.test(v.name));
+  if (pick) u.voice = pick;
   const av = row?.querySelector('.avatar');
-  u.onstart = () => av?.classList.add('speaking');
-  u.onend = u.onerror = () => av?.classList.remove('speaking');
+  u.onstart = () => { av?.classList.add('speaking'); if (!rec) voice('speaking'); };
+  u.onend = u.onerror = () => { av?.classList.remove('speaking'); if (!rec) voice(null); };
   speechSynthesis.speak(u);
 }
 
-/* ---------- card ---------- */
+function say(text) { if (text) speak(text, addMsg(text, 'bot')); }
+
+/* ---------- card pane ---------- */
+const handlers = {
+  action: (card, b) => runAction(card.action, b),
+  next: (card, b) => { b.disabled = true; act('next_step', {incident_id: card.recovery.incident_id}).finally(() => { b.disabled = false; }); },
+  repeat: card => say(card.recovery.text),
+};
+
 function render(card) {
-  $('empty').hidden = !!card;
-  $('card').hidden = !card;
-  if (!card) return;
-  const kind = card.kind || 'link';
-  const el = $('card');
-  el.className = `card ${card.level} ${kind}` + (card.pending ? ' is-pending' : '');
-  el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-
-  $('badge-icon').innerHTML = `<use href="#${kind === 'recovery' ? 'i-lifebuoy' : kind === 'verify' ? 'i-phone' : ICON[card.level]}"/>`;
-  $('eyebrow').textContent = card.eyebrow || EYEBROW[kind]?.[card.level] || '';
-  $('title').textContent = card.title;
-
-  const showShot = kind === 'link' && (card.screenshot_url || card.pending);
-  $('shotwrap').hidden = !showShot;
-  $('shot-label').textContent = lastHost ? `Sandbox · ${lastHost}` : 'Sandbox';
-  const img = $('shot');
-  if (card.screenshot_url) img.src = card.screenshot_url; else img.removeAttribute('src');
-
-  $('pending').hidden = !card.pending;
-  $('reasons').replaceChildren(...(card.reasons || []).slice(0, 3).map(r =>
-    Object.assign(document.createElement('li'), {textContent: r})));
-
-  const hint = $('hint');
-  hint.hidden = kind !== 'recovery' || card.level === 'grey';
-  hint.textContent = 'Say "next" when you have done this, or "repeat" to hear it again.';
-
-  const b = $('action');
-  b.hidden = !card.action;
-  b.disabled = false;
-  b.classList.remove('done');
-  b.querySelector('svg').innerHTML = `<use href="#${card.action?.tool === 'start_incident' ? 'i-lifebuoy' : 'i-users'}"/>`;
-  if (card.action) {
-    $('action-label').textContent = card.action.label;
-    b.onclick = () => runAction(card.action);
+  const pane = $('cardpane');
+  const k = key(card);
+  const next = card ? build(card, handlers) : idle();
+  current = card;
+  $('clock').hidden = !card;  // the idle panel already shows a big clock
+  const old = pane.firstElementChild;
+  const seq = ++renderSeq;
+  if (!old || k === currentKey || REDUCED.matches) {
+    pane.replaceChildren(next);  // same state (e.g. a button changed): no animation
+  } else {
+    // 200 ms fade out, then the new card slides in (CSS .enter, 260 ms)
+    old.classList.add('leave');
+    setTimeout(() => { if (seq === renderSeq) { next.classList.add('enter'); pane.replaceChildren(next); } }, 200);
   }
+  currentKey = k;
+  watchVerification(card);
 }
 
-function pendingCard() {
-  render({level: 'grey', kind: 'link', pending: true, eyebrow: 'Checking', title: 'Looking at this link…',
-          reasons: [], action: null});
+function pendingCard(host) {
+  render({kind: 'link', pending: true, domain: host, reasons: [], action: null});
+}
+
+/* ---------- caller check: poll until the family member answers ---------- */
+function watchVerification(card) {
+  const v = card?.kind === 'verify' ? card.verify : null;
+  if (!v || v.status !== 'waiting') { clearTimeout(polling); polling = null; return; }
+  if (polling) return;
+  const poll = async () => {
+    if (current?.verify?.id !== v.id || current.verify.status !== 'waiting') { polling = null; return; }
+    if (Date.now() - v.started_at > VERIFY_GIVE_UP_MS) {
+      polling = null;
+      render({...current, verify: {...current.verify, status: 'no_reply'}});
+      say(`${v.name} didn't answer. Don't send money. Call ${v.pronoun} back on the number you usually use.`);
+      return;
+    }
+    try {
+      const res = await post('/api/action', {tool: 'get_verification', args: {id: v.id}});
+      if (res.card?.verify?.status && res.card.verify.status !== 'waiting') { polling = null; handle(res); return; }
+    } catch { /* keep waiting; the network may come back */ }
+    polling = setTimeout(poll, POLL_MS);
+  };
+  polling = setTimeout(poll, POLL_MS);
 }
 
 /* ---------- requests ---------- */
@@ -107,9 +120,9 @@ async function post(path, body) {
 
 function handle(res) {
   typing(false);
-  if (res.error) addMsg(res.error, 'err');
-  render(res.card);
-  speak(res.reply, addMsg(res.reply, 'bot'));
+  if (res.error && DEBUG) addMsg(res.error, 'err');
+  if (res.card) render(res.card);
+  say(res.reply);
 }
 
 async function send(text) {
@@ -121,27 +134,34 @@ async function send(text) {
   $('text').value = '';
   const url = text.match(URL_RE);
   if (url) {
-    try { lastHost = new URL(/^https?:/i.test(url[0]) ? url[0] : 'http://' + url[0]).hostname; } catch { lastHost = ''; }
-    pendingCard();
+    let host = '';
+    try { host = new URL(/^https?:/i.test(url[0]) ? url[0] : 'http://' + url[0]).hostname; } catch { /* leave blank */ }
+    pendingCard(host);
   }
   typing(true);
   try { handle(await post('/api/chat', {message: text})); }
-  catch (e) { typing(false); addMsg('Something went wrong: ' + e.message, 'err'); }
+  catch (e) { typing(false); say("I can't reach my safety checks right now. If someone is asking for money, hang up and call family."); if (DEBUG) addMsg(e.message, 'err'); }
   busy = false;
 }
 
-async function runAction(a) {
-  const b = $('action');
-  b.disabled = true;
+async function act(tool, args) {
   try {
-    if (a.tool === 'start_incident' || a.tool === 'next_step') { await send(a.label); return; }
-    const res = await post('/api/action', {tool: a.tool, args: a.args});
-    if (res.error) { addMsg(res.error, 'err'); b.disabled = false; return; }
-    speak(res.reply, addMsg(res.reply, 'bot'));
-    b.classList.add('done');
-    b.querySelector('svg').innerHTML = '<use href="#i-check"/>';
-    $('action-label').textContent = a.tool === 'alert_family' ? 'Family told' : 'Done';
-  } catch (e) { addMsg('Something went wrong: ' + e.message, 'err'); b.disabled = false; }
+    const res = await post('/api/action', {tool, args});
+    if (res.error && DEBUG) addMsg(res.error, 'err');
+    if (res.card) render(res.card);
+    say(res.reply);
+    return res;
+  } catch (e) { say("Sorry, I couldn't do that just now."); if (DEBUG) addMsg(e.message, 'err'); }
+}
+
+async function runAction(a, b) {
+  if (!a) return;
+  b.disabled = true;
+  if (a.tool !== 'alert_family') { await act(a.tool, a.args); return; }
+  const res = await act(a.tool, a.args);
+  if (!res || res.error) { b.disabled = false; return; }
+  b.classList.add('is-done');
+  b.innerHTML = `${svg('i-check')}<span>${a.label.replace(/^Tell /, '')} has been told</span>`;
 }
 
 /* ---------- inputs ---------- */
@@ -169,25 +189,30 @@ if (!SR) {
       mic.setAttribute('aria-pressed', 'false');
       mic.setAttribute('aria-label', 'Tap and speak');
       rec = null;
+      voice(null);
       if (final) send(final); else interim('');
     };
     mic.classList.add('live');
     mic.setAttribute('aria-pressed', 'true');
     mic.setAttribute('aria-label', 'Listening. Tap to stop');
+    voice('listening');
     rec.start();
   };
 }
 
-/* ---------- status bar ---------- */
-function tick() { $('clock').textContent = new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}); }
-tick(); setInterval(tick, 15000);
+/* ---------- clocks, timers, debug chips ---------- */
+render(null);
+setInterval(() => tickClocks(), 1000);
 
-fetch('/api/health').then(r => r.json()).then(h => {
-  if (!h.mcp_ok) throw new Error('MCP server unreachable');
-  $('conn').classList.add('ok');
-  $('conn-text').textContent = `Connected · ${h.tools} tools`;
-  $('mode').hidden = false;
-  $('mode').textContent = h.mode === 'bedrock' ? 'Bedrock agent' : 'Mock agent';
-}).catch(() => { $('conn').classList.add('down'); $('conn-text').textContent = 'Offline'; });
+if (DEBUG) {
+  $('conn').hidden = false;
+  fetch('/api/health').then(r => r.json()).then(h => {
+    if (!h.mcp_ok) throw new Error('MCP server unreachable');
+    $('conn').classList.add('ok');
+    $('conn-text').textContent = `Connected · ${h.tools} tools`;
+    $('mode').hidden = false;
+    $('mode').textContent = h.mode === 'bedrock' ? 'Bedrock agent' : 'Mock agent';
+  }).catch(() => { $('conn').classList.add('down'); $('conn-text').textContent = 'Offline'; });
+}
 
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
