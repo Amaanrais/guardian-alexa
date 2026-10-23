@@ -1,5 +1,7 @@
 # guardian-alexa
 
+Website: https://guardian-alexa.netlify.app/ (home, privacy and terms).
+
 New here? Start with [GUIDE.md](GUIDE.md): setup, running it, the demo script and troubleshooting.
 
 ## Harness — simulated Echo Show
