@@ -83,6 +83,18 @@ def _verdict_speech(data: dict, what: str) -> str:
     return f"{lead} {reasons[0] + '.' if reasons else ''} Never share a code or PIN.".replace("..", ".")
 
 
+async def _with_report(client, data: dict, st: dict, trace: list) -> dict:
+    """Wait for check_link's sandbox report, so the answer includes what the page itself asks for."""
+    if not data.get("job_id"):
+        return data
+    for _ in range(15):  # sandbox visit takes about 10 s
+        rep = await _call(client, "get_link_report", {"job_id": data["job_id"]}, st, trace)
+        if rep.get("status") in ("done", "complete", "completed", "failed", "error"):
+            break
+        await asyncio.sleep(1)
+    return {**data, **rep}
+
+
 async def _start_recovery(text: str, client, st: dict, trace: list) -> str:
     data = await _call(client, "start_incident", {"description": text}, st, trace)
     if data.get("error"):
@@ -100,14 +112,7 @@ async def _mock(text: str, client, st: dict, trace: list) -> str:
     if st.get("clarify") and not url:
         return await _start_recovery(text, client, st, trace)  # their answer to "code or link?"
     if url:
-        data = await _call(client, "check_link", {"url": url.group(0)}, st, trace)
-        if data.get("job_id"):
-            for _ in range(15):  # sandbox visit takes about 10 s
-                rep = await _call(client, "get_link_report", {"job_id": data["job_id"]}, st, trace)
-                if rep.get("status") in ("done", "complete", "completed", "failed", "error"):
-                    break
-                await asyncio.sleep(1)
-            data = {**data, **rep}
+        data = await _with_report(client, await _call(client, "check_link", {"url": url.group(0)}, st, trace), st, trace)
         if ALREADY_RE.search(text) and st["card"] and st["card"].get("level") in ("red", "amber"):
             st["card"]["action"] = start_recovery(text)
         return _verdict_speech(data, "link")
@@ -148,7 +153,11 @@ async def _llm(text: str, client, st: dict, trace: list) -> str:
         st["messages"].append(msg)
         if not calls:
             return reply
-        results = [(cid, await _call(client, tool, args, st, trace)) for cid, tool, args in calls]
+        results = []
+        for cid, tool, args in calls:
+            data = await _call(client, tool, args, st, trace)
+            # the model can't wait 10 s on its own, so hand it the finished report
+            results.append((cid, await _with_report(client, data, st, trace) if tool == "check_link" else data))
         st["messages"] += p.results(results)
     return "Sorry, that took too long. Please try again."
 
