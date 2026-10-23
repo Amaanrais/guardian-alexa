@@ -1,10 +1,9 @@
 # Friction log
 
-Anything confusing or broken while building Guardian (AWS sign-up, Bedrock, Alexa+ docs, tooling).
-Newest first. Copy the template, keep it short, add a screenshot path if you have one.
+Anything confusing or broken while building Guardian.
 
 ```
-## YYYY-MM-DD HH:MM · Area (AWS / Bedrock / Alexa+ / Telegram / tooling) · who
+## YYYY-MM-DD HH:MM · Area (Alexa+ / tooling / etc) · who
 - Tried:
 - Expected:
 - Happened:   (exact error text)
