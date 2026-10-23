@@ -1,5 +1,7 @@
 # guardian-alexa
 
+New here? Start with [GUIDE.md](GUIDE.md): setup, running it, the demo script and troubleshooting.
+
 ## Harness — simulated Echo Show
 
 A browser page styled like an Echo Show (left: transcript + mic + spoken replies, right: verdict card)
