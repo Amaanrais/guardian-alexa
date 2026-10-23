@@ -32,7 +32,6 @@ INJECTION_RE = re.compile(
     r"(trick|fool|manipulate) (the |an )?(ai|assistant|chatbot)",
     re.I,
 )
-# The clarifying question's two answers, as buttons
 CHOICES = [{"label": "I shared a code", "tool": "start_incident", "args": {"description": "I shared a code"}},
            {"label": "I clicked a link", "tool": "start_incident", "args": {"description": "I clicked a link and typed my password"}}]
 VERIFY_STATUSES = ("confirmed", "denied", "no_reply")

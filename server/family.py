@@ -92,8 +92,6 @@ def _spawn(coro) -> None:
     task.add_done_callback(_tasks.discard)
 
 
-# ---------- the family circle ----------
-
 def members() -> list[dict]:
     found = list(get_store().all(FAMILY).values())
     if not found and config.TELEGRAM_FAKE:
@@ -121,8 +119,6 @@ def add_member(name: str, chat_id: int) -> str:
     get_store().put(FAMILY, key, {"name": name.strip(), "chat_id": chat_id, "joined_at": time.time()})
     return "added"
 
-
-# ---------- verify_caller / get_verification ----------
 
 async def verify_caller(name: str) -> dict:
     member = find(name)
@@ -178,8 +174,6 @@ async def get_verification(vid: str) -> dict:
     return {"status": _current_status(vid, record)}
 
 
-# ---------- alert_family ----------
-
 async def alert_family(reason: str) -> dict:
     """Message everyone in the family circle. Recipients come from config only."""
     reason = " ".join(str(reason).split())[:500]
@@ -200,8 +194,6 @@ async def alert_family(reason: str) -> dict:
             log.warning("alert to %s failed: %s", m["name"], exc)
     return {"sent": bool(sent), "recipients": sent}
 
-
-# ---------- incoming updates: button presses and /start ----------
 
 async def handle_update(update: dict) -> None:
     tg = telegram()

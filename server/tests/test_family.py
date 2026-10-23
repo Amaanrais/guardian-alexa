@@ -21,8 +21,6 @@ async def wait_for(vid, status, timeout=2.0):
         await asyncio.sleep(0.02)
 
 
-# ---------- fake mode ----------
-
 async def test_fake_verify_is_denied_after_a_delay():
     out = await family.verify_caller("Rahul")  # the fake-mode demo member
     assert out["status"] == "waiting"
@@ -69,8 +67,6 @@ async def test_alert_with_nobody_to_tell(monkeypatch):
     monkeypatch.setattr(config, "TELEGRAM_FAKE", False)
     assert await family.alert_family("x") == {"sent": False, "recipients": []}
 
-
-# ---------- real mode against a fake Bot API ----------
 
 class FakeBot:
     """Records Bot API calls; answers like Telegram does."""
@@ -206,8 +202,6 @@ def test_redact_filter_blanks_the_token(monkeypatch):
     family.RedactToken().filter(record)
     assert TOKEN not in record.getMessage()
 
-
-# ---------- get_family_circle ----------
 
 def test_circle_is_names_only_in_join_order():
     join("Amaan", 42)

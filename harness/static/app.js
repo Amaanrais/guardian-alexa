@@ -13,7 +13,6 @@ const view = q('[data-view]'), input = q('[data-input]'), line = q('[data-line]'
 
 let rec = null, busy = false, current = null, currentKey = null, polling = null, renderSeq = 0, unseen = 0;
 
-/* ---------- transcript sheet and voice bar ---------- */
 function addMsg(text, who) {
   const row = document.createElement('div');
   row.className = 'msg ' + who;
@@ -59,7 +58,6 @@ function speak(text) {
 
 function say(text) { if (text) { addMsg(text, 'bot'); speak(text); } }
 
-/* ---------- view: home screen or a full-screen card ---------- */
 const handlers = {
   action: (card, b) => runAction(card.action, b),
   next: (card, b) => { b.disabled = true; act('next_step', {incident_id: card.recovery.incident_id}).finally(() => { b.disabled = false; }); },
@@ -124,7 +122,6 @@ function pendingCard(host) {
   render({kind: 'link', pending: true, domain: host, reasons: [], action: null});
 }
 
-/* ---------- caller check: poll until the family member answers ---------- */
 function watchVerification(card) {
   const v = card?.kind === 'verify' ? card.verify : null;
   if (!v || v.status !== 'waiting') { clearTimeout(polling); polling = null; return; }
@@ -146,7 +143,6 @@ function watchVerification(card) {
   polling = setTimeout(poll, POLL_MS);
 }
 
-/* ---------- requests ---------- */
 async function post(path, body) {
   const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'},
                                body: JSON.stringify({session_id: sid, ...body})});
@@ -214,7 +210,6 @@ async function runAction(a, b) {
   } catch (e) { say("Sorry, I couldn't do that just now."); b.disabled = false; if (DEBUG) addMsg(e.message, 'err'); }
 }
 
-/* ---------- inputs ---------- */
 q('[data-form]').onsubmit = e => { e.preventDefault(); send(input.value); };
 root.querySelectorAll('[data-say]').forEach(b => { b.onclick = () => send(b.dataset.say); });
 root.querySelectorAll('[data-nav="home"]').forEach(b => { b.onclick = () => { sheet(false); render(null); }; });
@@ -254,7 +249,6 @@ if (!SR) {
   };
 }
 
-/* ---------- top bar: clock, weather, debug chips ---------- */
 render(null);
 tickClocks(root);
 setInterval(() => tickClocks(root), 1000);

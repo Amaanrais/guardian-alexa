@@ -66,7 +66,6 @@ async def _call(client, tool: str, args: dict, st: dict, trace: list) -> dict:
     return data
 
 
-# ---------- mock mode ----------
 def _name(text: str) -> str | None:
     # speech-to-text often doesn't capitalise names, so look for the family circle's own names first
     for n in circle.names():
@@ -113,7 +112,7 @@ async def _start_recovery(text: str, client, st: dict, trace: list) -> str:
     if data.get("error"):
         return data["error"]
     if st["clarify"]:
-        return _step_text(data)  # just the question
+        return _step_text(data)
     st["last_step"] = _step_text(data) or "Let's take this one step at a time."
     return ("Stay calm, we will fix this together. I will never ask for your code or PIN. "
             f"{st['last_step']} Say 'next' when done, or 'repeat'.")
@@ -156,7 +155,6 @@ async def _mock(text: str, client, st: dict, trace: list) -> str:
     return "I can check a link or message, find out if a caller is really family, or help if you already shared a code. What happened?"
 
 
-# ---------- LLM mode (any provider, see llm.py) ----------
 class ModelDown(Exception):
     """The model call failed twice (free models are rate-limited); this turn falls back to mock mode."""
 
@@ -234,7 +232,7 @@ async def act(sid: str, tool: str, args: dict) -> dict:
     except Exception as e:
         return {"reply": "I couldn't do that just now.", "card": st["card"], "trace": trace,
                 "error": f"{type(e).__name__}: {e}"}
-    data = trace[0]["result"] if trace else {}  # the tool pressed, not follow-ups like the family alert
+    data = trace[0]["result"] if trace else {}  # the tool pressed, not the follow-up polls
     if data.get("error"):
         reply = data["error"]
     elif tool == "alert_family":

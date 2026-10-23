@@ -225,7 +225,6 @@ async def _browse(url: str, screenshot_path: Path, client: httpx.AsyncClient, re
                     # Partial loads are still worth inspecting; record why and carry on.
                     result.error = type(exc).__name__
                 if pending_redirect is None and not settled:
-                    # Give script and meta-refresh redirects a moment to fire.
                     settled = True
                     with contextlib.suppress(Exception):
                         await page.wait_for_timeout(min(SETTLE_S, max(0.0, deadline - loop.time())) * 1000)

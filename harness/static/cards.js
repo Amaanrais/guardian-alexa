@@ -51,7 +51,6 @@
   const EYEBROW = {link: 'Link check', message: 'Message check', verify: 'Caller check', recovery: 'Recovery'};
   const LOADING = 'Checking it safely… about 10 seconds';
 
-  /* ---------- the screen: top bar, view, suggestions, voice bar, transcript sheet ---------- */
   function screen() {
     return html(`<div class="screen">
       <header class="topbar">
@@ -92,7 +91,6 @@
     </div>`);
   }
 
-  /* ---------- home: three glass cards ---------- */
   function home(d = {}) {
     const n = d.checks_this_week ?? 0;
     const ok = d.mcp_ok !== false;
@@ -121,7 +119,6 @@
     </div>`);
   }
 
-  /* ---------- result cards ---------- */
   const homeButton = () => `<button type="button" class="btn btn-quiet btn-home" data-do="home">${svg('i-home')}<span>Home</span></button>`;
   const button = (label, icon, cls, data) => `<button type="button" class="btn ${cls}" data-do="${data}">${svg(icon)}<span>${esc(label)}</span></button>`;
   const head = (icon, eyebrow, title) => `<header class="card-head">
@@ -232,7 +229,6 @@
     return `${svg('i-' + w.icon)}<span class="temp">${w.temp}°</span><span class="sr-only">${esc(w.words)}</span>`;
   }
 
-  /** Update every clock and caller-check timer inside `root`. */
   function tickClocks(root = document) {
     const now = new Date();
     const hm = new Intl.DateTimeFormat([], {hour: 'numeric', minute: '2-digit'}).formatToParts(now)
