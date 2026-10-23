@@ -1,9 +1,7 @@
 """Agent loop: LLM tool use through llm.py (Bedrock, Groq, OpenRouter, ...), or keyword-routed mock mode."""
 import asyncio
-import json
 import os
 import re
-from pathlib import Path
 
 import history
 import circle
@@ -23,9 +21,6 @@ SYSTEM = (
     "is done, and answer from the full report (verdict and reasons). After verify_caller, poll "
     "get_verification until its status is no longer 'waiting', then give the result."
 )
-# shared_code ends with its own "Ask my family" button, so the finish doesn't alert the family as well.
-_PLAYBOOKS = Path(__file__).resolve().parent.parent / "playbooks"
-NO_FINISH_ALERT = {json.loads((_PLAYBOOKS / "shared_code.json").read_text())["title"]}
 URL_RE = re.compile(r"(https?://\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/\S*)", re.I)
 # "safe" never describes a link or page; "Checking it safely" is about how Guardian checks, so it stays.
 SAFE_RE = re.compile(r"(?<!checking it )\bsafe(ly)?\b", re.I)
@@ -68,10 +63,6 @@ async def _call(client, tool: str, args: dict, st: dict, trace: list) -> dict:
         st["card"] = card
     if card and card["kind"] in ("link", "message") and not card["pending"]:
         history.record(card)
-    if card and card["kind"] == "recovery" and card["recovery"].get("done") and st.get("playbook") not in NO_FINISH_ALERT:
-        # The finished-recovery card says the family has been told, so tell them.
-        sent = await _call(client, "alert_family", {"reason": "Finished every recovery step after a possible scam."}, st, trace)
-        card["recovery"]["family_told"] = bool(sent.get("sent"))
     return data
 
 
