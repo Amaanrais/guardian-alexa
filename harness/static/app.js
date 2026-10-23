@@ -4,6 +4,7 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const URL_RE = /(https?:\/\/\S+|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\/\S*)/i;
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+const IDLE = 'Tap the mic and ask me anything.';
 const POLL_MS = 3000, VERIFY_GIVE_UP_MS = 120000, WEATHER_MS = 15 * 60000, HOME_MS = 30000;
 
 const root = screen();
@@ -94,7 +95,7 @@ function render(card) {
   current = card;
   currentKey = k;
   root.classList.toggle('on-home', !card);
-  if (!card) { unseen = 0; bell(); }
+  if (!card) { unseen = 0; bell(); line.textContent = IDLE; }
   const next = card ? build(card, handlers) : home(lastHome);
   swap(next, changed);
   if (!card) refreshHome();
@@ -154,6 +155,7 @@ function handle(res) {
   typing(false);
   if (res.error && DEBUG) addMsg(res.error, 'err');
   if (res.card) {
+    sheet(false);  // a typed question would otherwise leave the answer's card hidden under the transcript
     const finished = ['link', 'message'].includes(res.card.kind) && !res.card.pending && key(res.card) !== currentKey;
     if (finished) { unseen++; bell(); }
     render(res.card);
@@ -176,6 +178,7 @@ async function send(text) {
   if (url) {
     let host = '';
     try { host = new URL(/^https?:/i.test(url[0]) ? url[0] : 'http://' + url[0]).hostname; } catch { /* leave blank */ }
+    sheet(false);
     pendingCard(host);
   }
   typing(true);
@@ -215,7 +218,7 @@ root.querySelectorAll('[data-say]').forEach(b => { b.onclick = () => send(b.data
 root.querySelectorAll('[data-nav="home"]').forEach(b => { b.onclick = () => { sheet(false); render(null); }; });
 q('[data-expand]').onclick = () => sheet(q('[data-sheet]').hidden);
 q('[data-type]').onclick = () => sheet(true, true);
-q('[data-collapse]').onclick = () => sheet(false);
+q('[data-collapse]').onclick = () => { sheet(false); line.textContent = IDLE; };
 
 const mic = q('[data-mic]');
 if (!SR) {
@@ -239,7 +242,7 @@ if (!SR) {
       mic.setAttribute('aria-label', 'Tap and speak');
       rec = null;
       voice(null);
-      if (final) send(final); else line.textContent = 'Tap the mic and ask me anything.';
+      if (final) send(final); else line.textContent = IDLE;
     };
     mic.classList.add('live');
     mic.setAttribute('aria-pressed', 'true');
