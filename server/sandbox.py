@@ -77,6 +77,22 @@ IDENTITY_TEXT_JS = """
 """
 MAX_IDENTITY_TEXT = 4000
 
+# All text on the page, hidden or not, plus HTML comments: where instructions aimed at an AI hide.
+PAGE_TEXT_JS = """
+() => {
+  const parts = [];
+  const walk = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT);
+  while (walk.nextNode()) {
+    const n = walk.currentNode, parent = n.parentNode && n.parentNode.nodeName;
+    if (parent !== 'SCRIPT' && parent !== 'STYLE' && n.nodeValue.trim()) parts.push(n.nodeValue.trim());
+  }
+  for (const el of document.querySelectorAll('[aria-label], [title], img[alt]'))
+    parts.push(el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('alt') || '');
+  return parts.join('\\n');
+}
+"""
+MAX_PAGE_TEXT = 20000
+
 
 @dataclass
 class SandboxResult:
@@ -85,6 +101,7 @@ class SandboxResult:
     final_domain: str | None = None
     fields: set[str] = field(default_factory=set)
     identity_text: str = ""  # title, h1/h2, logo alt text and og:site_name, across frames
+    page_text: str = ""  # every text node and comment, hidden ones too; only ever scanned, never passed on
     screenshot_path: str | None = None
     blocked_url: str | None = None  # a hop that resolved to a private address
     download_attempted: bool = False
@@ -222,6 +239,9 @@ async def _browse(url: str, screenshot_path: Path, client: httpx.AsyncClient, re
                 with contextlib.suppress(Exception):
                     text = await frame.evaluate(IDENTITY_TEXT_JS)
                     result.identity_text = (result.identity_text + "\n" + text)[:MAX_IDENTITY_TEXT]
+                with contextlib.suppress(Exception):
+                    text = await frame.evaluate(PAGE_TEXT_JS)
+                    result.page_text = (result.page_text + "\n" + text)[:MAX_PAGE_TEXT]
             if loaded:
                 with contextlib.suppress(Exception):
                     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
