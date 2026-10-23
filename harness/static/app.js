@@ -278,7 +278,7 @@ if (DEBUG) {
     q('[data-conn]').classList.add('ok');
     q('[data-conn-text]').textContent = `Connected · ${h.tools} tools`;
     q('[data-mode]').hidden = false;
-    q('[data-mode]').textContent = h.mode === 'bedrock' ? 'Bedrock agent' : 'Mock agent';
+    q('[data-mode]').textContent = h.mode === 'mock' ? 'Mock agent' : `${h.mode} · ${h.model}`;
   }).catch(() => { q('[data-conn]').classList.add('down'); q('[data-conn-text]').textContent = 'Offline'; });
 }
 

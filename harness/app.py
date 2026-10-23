@@ -58,7 +58,7 @@ async def _tool_names() -> list[str] | None:
 async def health():
     tools = await _tool_names()
     return {"mcp_url": _mcp_url(), "mcp_ok": tools is not None, "tools": len(tools) if tools is not None else None,
-            "mode": "bedrock" if os.getenv("USE_BEDROCK") == "1" else "mock"}
+            "mode": agent.llm.name(), "model": agent.llm.model() or None}
 
 
 @app.get("/api/home")

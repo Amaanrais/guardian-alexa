@@ -9,7 +9,7 @@ and a small FastAPI backend whose agent connects to the Guardian MCP server as a
 ### Run
 
 ```bash
-source venv/bin/activate && pip install -r requirements.txt
+source .venv/bin/activate && pip install -r requirements.txt
 # terminal 1: Guardian MCP server on http://localhost:8765/mcp
 # terminal 2:
 cd harness
@@ -20,7 +20,10 @@ Open http://localhost:8080 in **Chrome or Edge** (Web Speech API; other browsers
 | Env var | Default | Meaning |
 |---|---|---|
 | `MCP_URL` | `http://localhost:8765/mcp` | Guardian MCP server |
-| `USE_BEDROCK` | `0` | `1` = Bedrock Converse tool use; otherwise keyword-routed mock mode (no AWS) |
+| `AGENT_PROVIDER` | `mock` | `mock` = keyword routing, no LLM. `bedrock`, `groq`, `openrouter`, `openai`, `ollama`, or any name with `AGENT_BASE_URL` (OpenAI-compatible API). `USE_BEDROCK=1` still means `bedrock`. |
+| `AGENT_MODEL` | — | Model id for that provider, e.g. `llama-3.3-70b-versatile` (Groq), `anthropic/claude-sonnet-4.5` (OpenRouter). Must support tool calling. |
+| `AGENT_API_KEY` | — | Provider API key (not for `bedrock` or `ollama`) |
+| `AGENT_BASE_URL` | preset | Overrides the provider's URL, e.g. `https://api.together.xyz/v1` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | `us-east-1`, a Claude model id | Bedrock settings (needs AWS credentials + model access) |
 
 The harness reads the repo-root `.env` if present.
