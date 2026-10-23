@@ -173,3 +173,14 @@ def test_expired_jobs_take_their_screenshot_with_them(tmp_path, monkeypatch):
     linkcheck._jobs["new"] = linkcheck.Job(url="u", quick_signals=[])
     linkcheck._prune()
     assert list(linkcheck._jobs) == ["new"] and not old.exists() and new.exists()
+
+
+def test_blank_settings_from_env_example_use_defaults(monkeypatch):
+    import importlib
+    from server import config
+    monkeypatch.setenv("GUARDIAN_PORT", "")
+    monkeypatch.setenv("GUARDIAN_PERSON_NAME", "")
+    importlib.reload(config)
+    assert config.PORT == 8765 and config.PERSON_NAME == "Mum"
+    monkeypatch.undo()
+    importlib.reload(config)
