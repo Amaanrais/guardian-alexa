@@ -1,10 +1,11 @@
-"""Agent loop: Bedrock Converse with tool use, or keyword-routed mock mode."""
+"""Agent loop: LLM tool use through llm.py (Bedrock, Groq, OpenRouter, ...), or keyword-routed mock mode."""
 import asyncio
 import os
 import re
 
 import history
 import circle
+import llm
 from card import build_card, speech, start_recovery
 from mcp_client import connect, parse_result, tool_specs
 
@@ -66,6 +67,10 @@ async def _call(client, tool: str, args: dict, st: dict, trace: list) -> dict:
 
 # ---------- mock mode ----------
 def _name(text: str) -> str | None:
+    # speech-to-text often doesn't capitalise names, so look for the family circle's own names first
+    for n in circle.names():
+        if re.search(rf"\b{re.escape(n)}\b", text, re.I):
+            return n
     m = re.search(r"(?:really|is that|is it|check if it'?s|verify)\s+(?:really\s+)?([A-Z][a-z]+)", text)
     return m.group(1) if m else None
 
@@ -114,15 +119,15 @@ async def _mock(text: str, client, st: dict, trace: list) -> str:
     if st["verification"] and re.search(r"answer|reply|replied|did (he|she|they)", low):
         await _call(client, "get_verification", {"id": st["verification"]}, st, trace)
         return speech(st["card"]) or "No answer yet. Hang up if you feel unsure."
-    if st["incident"] and re.search(r"repeat|again", low):
+    if st["incident"] and re.search(r"\b(repeat|again)\b", low):
         return st["last_step"] or "Let's keep going. Say 'next' when you're ready."
-    if st["incident"] and re.search(r"next|done|ok|finished", low):
+    if st["incident"] and re.search(r"\b(next|done|ok|okay|finished)\b", low):
         data = await _call(client, "next_step", {"incident_id": st["incident"]}, st, trace)
         if data.get("error"):
             return data["error"]
         st["last_step"] = _step_text(data) or ("That's everything for now." if data.get("done") else "")
         return st["last_step"] or "That's everything for now."
-    if re.search(r"gave|shared|told|clicked|hacked|otp|code|pin", low):
+    if re.search(r"\b(gave|shared|told|clicked|hacked|otp|codes?|pin)\b", low):
         return await _start_recovery(text, client, st, trace)
     if re.search(r"\btell (my|the|" + "|".join([re.escape(n.lower()) for n in circle.names()] + ["family"]) + r")\b|alert|family", low):
         data = await _call(client, "alert_family", {"reason": text}, st, trace)
@@ -133,31 +138,18 @@ async def _mock(text: str, client, st: dict, trace: list) -> str:
     return "I can check a link or message, find out if a caller is really family, or help if you already shared a code. What happened?"
 
 
-# ---------- bedrock mode ----------
-def _bedrock_tools(specs):
-    return {"tools": [{"toolSpec": {"name": s["name"], "description": s["description"],
-                                    "inputSchema": {"json": s["schema"]}}} for s in specs]}
-
-
-async def _bedrock(text: str, client, st: dict, trace: list) -> str:
-    import boto3
-    br = boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "us-east-1"))
-    model = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
-    cfg = _bedrock_tools(tool_specs((await client.list_tools()).tools))
-    st["messages"].append({"role": "user", "content": [{"text": text}]})
+# ---------- LLM mode (any provider, see llm.py) ----------
+async def _llm(text: str, client, st: dict, trace: list) -> str:
+    p = llm.provider()
+    tools = tool_specs((await client.list_tools()).tools)
+    st["messages"].append(p.user(text))
     for _ in range(8):
-        resp = await asyncio.to_thread(br.converse, modelId=model, system=[{"text": SYSTEM}],
-                                       messages=st["messages"], toolConfig=cfg)
-        msg = resp["output"]["message"]
+        msg, calls, reply = await p.complete(SYSTEM, st["messages"], tools)
         st["messages"].append(msg)
-        calls = [b["toolUse"] for b in msg["content"] if "toolUse" in b]
         if not calls:
-            return "".join(b.get("text", "") for b in msg["content"]).strip()
-        results = []
-        for c in calls:
-            data = await _call(client, c["name"], c["input"], st, trace)
-            results.append({"toolResult": {"toolUseId": c["toolUseId"], "content": [{"json": data}]}})
-        st["messages"].append({"role": "user", "content": results})
+            return reply
+        results = [(cid, await _call(client, tool, args, st, trace)) for cid, tool, args in calls]
+        st["messages"] += p.results(results)
     return "Sorry, that took too long. Please try again."
 
 
@@ -177,7 +169,7 @@ async def respond(sid: str, text: str) -> dict:
     try:
         async with connect(_url()) as client:
             await circle.refresh(client)
-            run = _bedrock if os.getenv("USE_BEDROCK") == "1" else _mock
+            run = _mock if llm.name() == "mock" else _llm
             reply = await run(text, client, st, trace)
     except Exception as e:  # server down, no AWS credentials, etc.
         return {"reply": "I can't reach my safety checks right now. If someone is asking for money, hang up and call family.",

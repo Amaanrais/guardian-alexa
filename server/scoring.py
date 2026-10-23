@@ -41,6 +41,7 @@ WEIGHTS: dict[str, int] = {
     "redirect_to_private": 40,
     "download_attempt": 30,
     "page_unreachable": 25,
+    "ai_instructions": 60,  # honest pages never address the AI reading them
     # Message rules
     "urgency": 15,
     "gift_card": 45,

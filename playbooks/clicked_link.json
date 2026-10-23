@@ -1,5 +1,4 @@
 {
-  "_status": "PLACEHOLDER steps: replace with the real text before the demo",
   "id": "clicked_link",
   "title": "I clicked a link and typed my password",
   "family_summary": "clicked a link and typed a password",
@@ -21,12 +20,15 @@
       "text": "Close that page now. Don't type anything else into it."
     },
     {
-      "text": "Change the password for that account, using the app or website you normally use."
+      "text": "Change the password for that account. Use the app or website you normally use, not the link."
     },
     {
-      "text": "If you use the same password anywhere else, change it there too. Rahul can help you.",
+      "text": "If you typed your card details too, call your bank on the number on the back of your card."
+    },
+    {
+      "text": "If you use the same password anywhere else, change it there too. Your family can help you.",
       "action": {
-        "label": "Ask Rahul for help",
+        "label": "Ask my family for help",
         "tool": "alert_family",
         "args": {
           "reason": "Mum may need help changing passwords after clicking a link."
