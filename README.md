@@ -9,23 +9,39 @@ and a small FastAPI backend whose agent connects to the Guardian MCP server as a
 ### Run
 
 ```bash
-source .venv/bin/activate && pip install -r requirements.txt
-# terminal 1: Guardian MCP server on http://localhost:8765/mcp
+uv venv .venv --python 3.12 && .venv/bin/pip install -r requirements.txt   # once
+.venv/bin/playwright install chromium                                     # once, for the link sandbox
+cp .env.example .env            # then set AGENT_* (or keep AGENT_PROVIDER=mock, no key needed)
+
+# terminal 1, repo root: Guardian MCP server on http://localhost:8765/mcp
+.venv/bin/python -m server
 # terminal 2:
-cd harness
-MCP_URL=http://localhost:8765/mcp uvicorn app:app --port 8080
+cd harness && ../.venv/bin/uvicorn app:app --port 8080
 ```
 Open http://localhost:8080 in **Chrome or Edge** (Web Speech API; other browsers get typing only).
+The corner chip shows which agent is running (`Mock agent` or `openrouter · <model>`).
+
+`.env.example` lists only the settings you'll usually change; blank lines mean "use the default".
+Example for OpenRouter's free tier (free models are rate-limited, so keep `mock` as a demo fallback):
+
+```
+AGENT_PROVIDER=openrouter
+AGENT_MODEL=nvidia/nemotron-3.5-lightning:free
+AGENT_API_KEY=sk-or-...
+```
 
 | Env var | Default | Meaning |
 |---|---|---|
 | `MCP_URL` | `http://localhost:8765/mcp` | Guardian MCP server |
 | `AGENT_PROVIDER` | `mock` | `mock` = keyword routing, no LLM. `bedrock`, `groq`, `openrouter`, `openai`, `ollama`, or any name with `AGENT_BASE_URL` (OpenAI-compatible API). `USE_BEDROCK=1` still means `bedrock`. |
-| `AGENT_MODEL` | — | Model id for that provider, e.g. `llama-3.3-70b-versatile` (Groq), `anthropic/claude-sonnet-4.5` (OpenRouter). Must support tool calling. |
+| `AGENT_MODEL` | — | Model id for that provider, e.g. `llama-3.3-70b-versatile` (Groq), `nvidia/nemotron-3.5-lightning:free` (OpenRouter). Must support tool calling; embedding models won't work. |
 | `AGENT_API_KEY` | — | Provider API key (not for `bedrock` or `ollama`) |
 | `AGENT_BASE_URL` | preset | Overrides the provider's URL, e.g. `https://api.together.xyz/v1` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | `us-east-1`, a Claude model id | Bedrock settings (needs AWS credentials + model access) |
 
+Server settings (Telegram, port, person's name, ...) are in `server/README.md`.
+In both modes the harness itself waits for `check_link`'s sandbox report (~10 s) before answering,
+so the verdict includes what the page asks for, not just the address checks.
 The harness reads the repo-root `.env` if present.
 
 ### Mock mode phrases
