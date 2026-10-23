@@ -30,4 +30,9 @@ if [ -z "${URL:-}" ]; then
 fi
 
 echo "NordBank demo page: $URL/"
+set +e
 wait $TUNNEL
+STATUS=$?
+echo "cloudflared exited ($STATUS); last lines of its log:" >&2
+tail -20 "$LOG" >&2
+exit $STATUS
