@@ -1,5 +1,4 @@
 {
-  "_status": "PLACEHOLDER steps: replace with the real text before the demo",
   "id": "shared_code",
   "title": "I gave someone my code / OTP / PIN",
   "family_summary": "shared a code",
@@ -21,13 +20,23 @@
   ],
   "steps": [
     {
-      "text": "Call your bank now, using the number on the back of your card."
+      "text": "Call your bank now, on the number on the back of your card. Tell them you shared a code with someone."
     },
     {
       "text": "Ask them to block your card and stop any payments you didn't make."
     },
     {
-      "text": "Over the next few days, check your bank account. Call the bank about anything you don't recognise."
+      "text": "If someone calls you back saying they're from the bank, hang up. Call the number on your card yourself."
+    },
+    {
+      "text": "Over the next few days, check your bank account. Call the bank about anything you don't recognise.",
+      "action": {
+        "label": "Ask my family to check with me",
+        "tool": "alert_family",
+        "args": {
+          "reason": "Mum shared a code and has called the bank. Please help her check her account over the next few days."
+        }
+      }
     }
   ]
 }

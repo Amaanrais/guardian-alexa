@@ -114,8 +114,9 @@ def test_recovery_tools_over_http(client):
     start = call(client, "start_incident", {"description": "I gave someone my code"})["structuredContent"]
     assert set(start) == {"incident_id", "playbook_title", "step"}
     assert set(start["step"]) == {"text", "step_number", "total_steps"}  # no action on step 1: key omitted
-    steps = [call(client, "next_step", {"incident_id": start["incident_id"]})["structuredContent"] for _ in range(3)]
-    assert [set(s) for s in steps] == [{"step"}, {"step"}, {"done", "summary"}]
+    total = start["step"]["total_steps"]
+    steps = [call(client, "next_step", {"incident_id": start["incident_id"]})["structuredContent"] for _ in range(total)]
+    assert [set(s) for s in steps] == [{"step"}] * (total - 1) + [{"done", "summary"}]
 
     ask = call(client, "start_incident", {"description": "something odd happened"})["structuredContent"]
     assert ask["incident_id"] is None and ask["step"]["step_number"] == 0

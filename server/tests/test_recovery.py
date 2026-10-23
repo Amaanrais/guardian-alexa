@@ -64,25 +64,28 @@ def test_protective_advice_is_allowed(tmp_path):
 
 
 async def test_start_progress_and_done(alerts):
+    total = len(playbooks.load_all()["shared_code"].steps)  # the shipped playbook, whatever its length
     out = await recovery.start_incident("I gave someone my code")
     assert out["playbook_title"] == "I gave someone my code / OTP / PIN"
-    assert out["step"]["step_number"] == 1 and out["step"]["total_steps"] == 3
+    assert out["step"]["step_number"] == 1 and out["step"]["total_steps"] == total
     assert alerts == [f"{config.PERSON_NAME} started recovery: shared a code"]
 
     iid = out["incident_id"]
-    assert (await recovery.next_step(iid))["step"]["step_number"] == 2
-    assert (await recovery.next_step(iid))["step"]["step_number"] == 3
+    for number in range(2, total + 1):
+        assert (await recovery.next_step(iid))["step"]["step_number"] == number
     done = await recovery.next_step(iid)
-    assert done["done"] is True and "3 steps" in done["summary"]
+    assert done["done"] is True and f"{total} steps" in done["summary"]
     assert await recovery.next_step(iid) == done  # stays done
     # progress lives behind the storage interface
     assert storage.get_store().get("incidents", iid)["done"] is True
 
 
 async def test_step_action_is_passed_through(alerts):
+    pb = playbooks.load_all()["clicked_link"]
+    with_action = next(i for i, s in enumerate(pb.steps, 1) if "action" in s)
     iid = (await recovery.start_incident("I clicked a link"))["incident_id"]
-    await recovery.next_step(iid)
-    step = (await recovery.next_step(iid))["step"]
+    for _ in range(with_action - 1):
+        step = (await recovery.next_step(iid))["step"]
     assert step["action"]["tool"] == "alert_family"
 
 
