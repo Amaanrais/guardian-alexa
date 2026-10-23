@@ -13,6 +13,19 @@ Newest first. Copy the template, keep it short, add a screenshot path if you hav
 
 ---
 
+## 2026-10-23 · Setup · tooling
+- Tried: `cp .env.example .env`, then `python -m server`, as the README says.
+- Expected: the server starts with defaults.
+- Happened: `ValueError: invalid literal for int() with base 10: ''`. Blank `KEY=` lines overrode the defaults.
+- Workaround: blank now means "use the default" (`server/config.py`), and `.env.example` lists only the 6 usual settings.
+
+## 2026-10-23 · OpenRouter · tooling
+- Tried: `nvidia/nemotron-3.5-embed-1b:free` as the agent model.
+- Expected: the agent answers and calls tools.
+- Happened: not listed on OpenRouter, and an embedding model can't chat or call tools anyway.
+- Workaround: `nvidia/nemotron-3.5-lightning:free` (has tool calling). The model also answered links before the sandbox
+  finished, so the harness now waits for `get_link_report` itself.
+
 ## 2026-10-23 · Demo site · tooling
 - Tried: planning to serve the NordBank demo page from `localhost` and check it with `check_link`.
 - Expected: a sandbox report with a screenshot.
