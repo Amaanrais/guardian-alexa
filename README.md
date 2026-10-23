@@ -13,7 +13,7 @@ and a small FastAPI backend whose agent connects to the Guardian MCP server as a
 ```bash
 uv venv .venv --python 3.12 && .venv/bin/pip install -r requirements.txt   # once
 .venv/bin/playwright install chromium                                     # once, for the link sandbox
-cp .env.example .env            # then set AGENT_* (or keep AGENT_PROVIDER=mock, no key needed)
+cp .env.example .env            # then set AGENT_* (blank AGENT_PROVIDER = mock, no key needed)
 
 # terminal 1, repo root: Guardian MCP server on http://localhost:8765/mcp
 .venv/bin/python -m server
@@ -43,7 +43,9 @@ AGENT_API_KEY=sk-or-...
 
 Server settings (Telegram, port, person's name, ...) are in `server/README.md`.
 In both modes the harness itself waits for `check_link`'s sandbox report (~10 s) before answering,
-so the verdict includes what the page asks for, not just the address checks.
+so the verdict includes what the page asks for, not just the address checks. After `verify_caller`
+it likewise waits for the family member's answer. If a model call fails (free models are
+rate-limited), the harness retries once, then answers that turn in mock mode.
 The harness reads the repo-root `.env` if present.
 
 ### Mock mode phrases

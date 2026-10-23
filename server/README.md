@@ -51,7 +51,6 @@ Settings (all optional, read from `.env`):
 | `TELEGRAM_BOT_TOKEN` | *(empty)* | Bot token from Telegram's @BotFather. Secret: never logged. |
 | `TELEGRAM_FAKE` | *(empty)* | `1` = no network: call checks answer "denied" after 3 s, alerts only log. |
 | `TELEGRAM_JOIN_CODE` | *(empty)* | If set, family members join with `/start <code>`. Recommended, so strangers who find the bot can't join. |
-| `LLM_PROVIDER` | `none` | `bedrock`, `anthropic`, `openai` or `none`. Interface only for now (`llm.py`). |
 
 ## Brand list
 
@@ -167,7 +166,6 @@ inspect --method tools/call --tool-name check_message --tool-arg 'text=URGENT: b
 | `recovery.py`, `playbooks.py` | `start_incident` / `next_step`, playbook loading, matching and the no-secrets check. |
 | `family.py` | Telegram: family circle, call checks, alerts, the update poller, token redaction. |
 | `storage.py` | Key-value storage interface: JSON files in `server/data/` now, DynamoDB later. |
-| `llm.py` | The `LLM_PROVIDER` setting. Interface only. |
 | `scoring.py` | Fixed weights and thresholds (≥ 60 is the top verdict, ≥ 25 is `Be careful`). The only place scores are set. |
 
 **How the sandbox stays contained.** Chromium never makes a network request of its own. Every

@@ -179,7 +179,10 @@ async def _browse(url: str, screenshot_path: Path, client: httpx.AsyncClient, re
             return
         headers: dict[str, str] = {}
         for k, v in fetched.headers:
-            headers[k] = f"{headers[k]}\n{v}" if k in headers else v
+            # Chromium never fires "load" on a fulfilled response whose header value holds a newline
+            # (Cloudflare tunnels repeat x-robots-tag), so only Set-Cookie keeps Playwright's "\n".
+            sep = "\n" if k.lower() == "set-cookie" else ", "
+            headers[k] = f"{headers[k]}{sep}{v}" if k in headers else v
         await route.fulfill(status=fetched.status, headers=headers, body=fetched.body)
 
     async with async_playwright() as pw:

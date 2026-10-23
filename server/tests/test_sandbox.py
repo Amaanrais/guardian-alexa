@@ -103,6 +103,8 @@ class Site:
             return httpx.Response(200, html="<script>location.href='http://169.254.169.254/latest/meta-data/'</script>")
         if host in ("secure-login.test", "online.nordbank.example"):
             pages = {"/pin": NORDBANK_PIN, "/sms": NORDBANK_SMS, "/info": NORDBANK_NO_FIELDS, "/ai": NORDBANK_AI}
+            if request.url.path == "/tunnel":  # Cloudflare quick tunnels send x-robots-tag twice
+                return httpx.Response(200, html=NORDBANK_PIN, headers=[("x-robots-tag", "none"), ("x-robots-tag", "none")])
             return httpx.Response(200, html=pages[request.url.path])
         if host == "shop.test" and request.url.path in SHOP_PAGES:
             return httpx.Response(200, html=SHOP_PAGES[request.url.path])
@@ -246,3 +248,12 @@ async def test_redirect_to_private_ip_job_finishes_as_done(run_job):
     assert report["status"] == "done"
     assert report["verdict"] != "No red flags found"
     assert report["screenshot_path"] is None
+
+
+
+async def test_repeated_response_header_still_loads(fake_dns, tmp_path):
+    site = Site(fake_dns)
+    async with site.client() as client:
+        result = await sandbox.run_sandbox("http://secure-login.test/tunnel", tmp_path / "s.png", client=client)
+    assert result.error is None and result.final_domain == "secure-login.test"
+    assert result.fields == {"pin"}

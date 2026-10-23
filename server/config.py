@@ -36,9 +36,6 @@ TELEGRAM_FAKE = _env("TELEGRAM_FAKE", "") == "1"
 # If set, family members must send "/start <code>" to join; strongly recommended.
 TELEGRAM_JOIN_CODE = _env("TELEGRAM_JOIN_CODE", "")
 
-# bedrock | anthropic | openai | none
-LLM_PROVIDER = _env("LLM_PROVIDER", "none").strip().lower()
-
 # Fixed by spec, not configurable.
 QUICK_DNS_TIMEOUT_S = 0.35
 RDAP_TIMEOUT_S = 0.3
